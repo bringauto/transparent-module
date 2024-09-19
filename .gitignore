@@ -1,0 +1,6 @@
+_*/
+.vscode/
+.idea/
+.clang-format
+.scannerwork
+cmake-build-*
