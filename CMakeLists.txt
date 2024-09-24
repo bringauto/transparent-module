@@ -54,7 +54,6 @@ IF (NOT BRINGAUTO_SYSTEM_DEP)
     ENDIF ()
 ENDIF ()
 
-FIND_PACKAGE(nlohmann_json 3.10.5 REQUIRED)
 FIND_PACKAGE(fleet-protocol-interface 2.0.0 REQUIRED)
 FIND_PACKAGE(fleet-protocol-cxx-helpers-static 1.1.1 REQUIRED)
 
@@ -64,7 +63,6 @@ IF (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
     ### fleet-http-client dependencies
     FIND_PACKAGE(Boost REQUIRED)
     FIND_PACKAGE(cpprestsdk REQUIRED)
-    FIND_PACKAGE(libbringauto_logger 2.0.0 REQUIRED)
 ENDIF ()
 
 CMDEF_ADD_LIBRARY(
@@ -84,8 +82,7 @@ FILE(GLOB_RECURSE SOURCES "source/bringauto/*")
 
 ADD_LIBRARY(transparent_module_sources STATIC ${SOURCES})
 SET_PROPERTY(TARGET transparent_module_sources PROPERTY POSITION_INDEPENDENT_CODE ON)
-TARGET_LINK_LIBRARIES(transparent_module_sources PUBLIC nlohmann_json::nlohmann_json
-        transparent_module_hpp
+TARGET_LINK_LIBRARIES(transparent_module_sources PUBLIC transparent_module_hpp
         fleet-protocol-interface::common-headers-interface
         fleet-protocol-cxx-helpers-static::fleet-protocol-cxx-helpers-static
 )
