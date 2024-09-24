@@ -4,3 +4,4 @@ _*/
 .clang-format
 .scannerwork
 cmake-build-*
+.venv/
