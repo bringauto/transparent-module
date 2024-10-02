@@ -8,10 +8,7 @@
 namespace bringauto::modules::transparent_module::devices::testing_device
 {
 
-    int testing_device_send_status_condition(const buffer current_status, const buffer new_status)
-    {
-        return OK;
-    }
+    int testing_device_send_status_condition(const buffer current_status, const buffer new_status) { return OK; }
 
     int testing_device_generate_command(buffer *generated_command, const buffer new_status, const buffer current_status,
                                         const buffer current_command)
@@ -32,7 +29,7 @@ namespace bringauto::modules::transparent_module::devices::testing_device
             return NOT_OK;
         }
         std::memcpy(aggregated_status->data, new_status.data, aggregated_status->size_in_bytes);
-        
+
         return OK;
     }
 
@@ -48,7 +45,7 @@ namespace bringauto::modules::transparent_module::devices::testing_device
     int testing_device_generate_first_command(buffer *default_command)
     {
         const char *command = R"("default_command")";
-        
+
         if (allocate(default_command, strlen(command)) == NOT_OK)
         {
             return NOT_OK;

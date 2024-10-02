@@ -179,13 +179,13 @@ int forward_status(const buffer device_status, const device_identification devic
 
     try
     {
-        auto str = std::string(device_status_str.getStringView());
+        std::string str = std::string(device_status_str.getStringView());
         auto raw_str = R"(")" + str + R"(")";
         con->fleet_api_client->sendStatus(raw_str);
     }
     catch (std::exception &e)
     {
-        return -1;
+        return NOT_OK;
     }
 
 
