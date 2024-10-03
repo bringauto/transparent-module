@@ -37,10 +37,10 @@ def main():
                 client.send_status(my_status.encode(), timeout=10)
                 n += 1
 
-            except exceptions.ServerTookTooLong:
+            except exceptions.ServerTookTooLong as e:
                 logging.error(f"Server timed out, context invalid: {e}")
                 break
-            except (exceptions.CommunicationExceptions, exceptions.ConnectExceptions):
+            except (exceptions.CommunicationExceptions, exceptions.ConnectExceptions) as e:
                 logging.error(f"Server error, context invalid: {e}")
                 break
 

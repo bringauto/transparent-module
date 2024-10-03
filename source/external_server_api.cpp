@@ -112,7 +112,6 @@ void *init(const config config_data)
                 delete context;
                 return nullptr;
             }
-            config
         }
         else if (i->first == "retry_requests_delay_ms")
         {
@@ -286,6 +285,7 @@ int device_connected(const device_identification device, void *context)
 
     if (allocate(&new_device.device_name, device.device_name.size_in_bytes) != OK)
     {
+        deallocate(&new_device.device_role);
         return NOT_OK;
     }
     std::memcpy(new_device.device_name.data, device.device_name.data, new_device.device_name.size_in_bytes);
@@ -368,8 +368,11 @@ int pop_command(buffer *command, device_identification *device, void *context)
     }
 
     auto con = static_cast<struct bringauto::transparent_module_utils::context *>(context);
+    if (con->command_vector.empty())
+    {
+        return NOT_OK;
+    }
     auto command_object = std::get<0>(con->command_vector.back());
-
 
     auto &device_id = std::get<1>(con->command_vector.back());
 

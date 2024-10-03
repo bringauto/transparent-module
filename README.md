@@ -44,7 +44,7 @@ To send data from `http_api` to the module, use the following JSON structure:
 ]
 ```
 
-Where `device_id.name`, `device_id.role` and `device_id.type` have to be same as the connected device.
+Where `device_id.name`, `device_id.role` and `device_id.type` have to be the same as the connected device.
 And in `payload.data` you can put any string you want to send.
 
 ## Example
