@@ -21,7 +21,14 @@ int allocate(buffer *buffer_pointer, size_t size_in_bytes)
 
 void deallocate(buffer *buffer_pointer)
 {
-    delete[] static_cast<uint8_t *>(buffer_pointer->data);
+    if (buffer_pointer == nullptr)
+    {
+        return;
+    }
+    if (buffer_pointer->data != nullptr)
+    {
+        delete[] static_cast<uint8_t *>(buffer_pointer->data);
+    }
     buffer_pointer->data = nullptr;
     buffer_pointer->size_in_bytes = 0;
 }

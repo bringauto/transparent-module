@@ -20,10 +20,12 @@ void *init(const config config_data)
     std::string api_key;
     std::string company_name;
     std::string car_name;
-    int max_requests_threshold_count;
-    int max_requests_threshold_period_ms;
-    int delay_after_threshold_reached_ms;
-    int retry_requests_delay_ms;
+    // Default values are set in case the configuration file does not contain the values and are based on values used in
+    // external server configuration file
+    int max_requests_threshold_count = 5;
+    int max_requests_threshold_period_ms = 1000;
+    int delay_after_threshold_reached_ms = 500;
+    int retry_requests_delay_ms = 220;
 
     for (auto i = config.cbegin(); i != config.cend(); i++)
     {
@@ -110,6 +112,7 @@ void *init(const config config_data)
                 delete context;
                 return nullptr;
             }
+            config
         }
         else if (i->first == "retry_requests_delay_ms")
         {

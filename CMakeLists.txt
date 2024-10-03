@@ -77,7 +77,6 @@ FILE(GLOB_RECURSE HEADERS "include/*")
 ADD_LIBRARY(transparent_module_hpp INTERFACE ${HEADERS})
 TARGET_INCLUDE_DIRECTORIES(transparent_module_hpp INTERFACE "include/")
 
-# FILE(GLOB_RECURSE SOURCES "source/bringauto/*")
 FILE(GLOB_RECURSE SOURCES "source/bringauto/*")
 
 ADD_LIBRARY(transparent_module_sources STATIC ${SOURCES})
@@ -102,7 +101,6 @@ IF (FLEET_PROTOCOL_BUILD_MODULE_GATEWAY)
     )
     TARGET_LINK_LIBRARIES(transparent-module-interface INTERFACE
             transparent-module-gateway-shared
-            transparent-external-server-shared
     )
 ENDIF ()
 

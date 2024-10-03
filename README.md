@@ -8,6 +8,7 @@ The Transparent Module serves primarily for testing purposes. It has no specific
 - Module do not implement any logic for specific device types.
 - All device numbers are valid but do not affect the module's function.
 - Names and roles of connected devices must match the following regular expression: `^[a-z0-9_]*$`.
+- As the default command (the command that is sent before any command is received), the module sends the raw string `"default_command"`.
 
 ## Requirements
 

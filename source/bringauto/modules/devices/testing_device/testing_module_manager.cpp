@@ -8,7 +8,12 @@
 namespace bringauto::modules::transparent_module::devices::testing_device
 {
 
-    int testing_device_send_status_condition(const buffer current_status, const buffer new_status) { return OK; }
+    int testing_device_send_status_condition(const buffer current_status, const buffer new_status)
+    {
+        // This function does not impose any conditions on the status change.
+        // It exists solely for compatibility purposes.
+        return OK;
+    }
 
     int testing_device_generate_command(buffer *generated_command, const buffer new_status, const buffer current_status,
                                         const buffer current_command)
@@ -45,18 +50,32 @@ namespace bringauto::modules::transparent_module::devices::testing_device
     int testing_device_generate_first_command(buffer *default_command)
     {
         const char *command = R"("default_command")";
+        size_t command_length = strlen(command);
 
-        if (allocate(default_command, strlen(command)) == NOT_OK)
+        if (allocate(default_command, command_length + 1) == NOT_OK)
         {
             return NOT_OK;
         }
-
-        std::memcpy(default_command->data, command, default_command->size_in_bytes);
+        if (snprintf(static_cast<char *>(default_command->data), default_command->size_in_bytes, "%s", command) < 0)
+        {
+            deallocate(default_command);
+            return NOT_OK;
+        }
         return OK;
     }
 
-    int testing_device_status_data_valid(const buffer status) { return OK; }
+    int testing_device_status_data_valid(const buffer status)
+    {
+        // This function does not perform any validation on the status data.
+        // It is provided for compatibility purposes.
+        return OK;
+    }
 
-    int testing_device_command_data_valid(const buffer command) { return OK; }
+    int testing_device_command_data_valid(const buffer command)
+    {
+        // This function does not perform any validation on the command data.
+        // It is provided for compatibility purposes.
+        return OK;
+    }
 
 } // namespace bringauto::modules::transparent_module::devices::testing_device
