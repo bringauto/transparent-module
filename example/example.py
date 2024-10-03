@@ -23,10 +23,10 @@ def main():
         )
     except exceptions.CommunicationExceptions as e:
         logging.error(f"Couldn't connect to server: {e}.")
-        return False
+        return
     except exceptions.ConnectExceptions as e:
         logging.error(f"Device could not be connected because server responded with: {e}.")
-        return False
+        return
 
     n = 0
     try:
