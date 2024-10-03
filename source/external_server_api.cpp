@@ -401,9 +401,10 @@ int pop_command(buffer *command, device_identification *device, void *context)
     }
 
     std::memcpy(command->data, command_string.c_str(), command->size_in_bytes);
-    return OK;
 
     return static_cast<int>(con->command_vector.size());
 }
 
-int command_ack(const buffer command, const device_identification device, void *context) { return OK; }
+int command_ack(const buffer command, const device_identification device, void *context) { 
+    // This function is not used and is only there to work with the interface.
+    return OK; }
