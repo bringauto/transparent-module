@@ -388,6 +388,7 @@ int pop_command(buffer *command, device_identification *device, void *context)
 
     if (allocate(&device->device_name, device_id.getDeviceId().device_name.size_in_bytes) == NOT_OK)
     {
+        deallocate(&device->device_role);
         return NOT_OK;
     }
     std::memcpy(device->device_name.data, device_id.getDeviceId().device_name.data, device->device_name.size_in_bytes);
@@ -395,16 +396,20 @@ int pop_command(buffer *command, device_identification *device, void *context)
     auto command_string = con->command_vector.back().first;
     con->command_vector.pop_back();
 
-    if (allocate(command, command_string.length() + 1) == NOT_OK)
+    if (allocate(command, command_string.length()) == NOT_OK)
     {
+        deallocate(&device->device_role);
+        deallocate(&device->device_name);
         return NOT_OK;
     }
 
-    std::memcpy(command->data, command_string.c_str(), command->size_in_bytes);
+    bringauto::fleet_protocol::cxx::StringAsBuffer::createBufferAndCopyData(command, command_string);
 
     return static_cast<int>(con->command_vector.size());
 }
 
-int command_ack(const buffer command, const device_identification device, void *context) { 
+int command_ack(const buffer command, const device_identification device, void *context)
+{
     // This function is not used and is only there to work with the interface.
-    return OK; }
+    return OK;
+}

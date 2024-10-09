@@ -52,15 +52,11 @@ namespace bringauto::modules::transparent_module::devices::testing_device
         const char *command = R"("default_command")";
         size_t command_length = strlen(command);
 
-        if (allocate(default_command, command_length + 1) == NOT_OK)
+        if (allocate(default_command, command_length) == NOT_OK)
         {
             return NOT_OK;
         }
-        if (snprintf(static_cast<char *>(default_command->data), default_command->size_in_bytes, "%s", command) < 0)
-        {
-            deallocate(default_command);
-            return NOT_OK;
-        }
+        std::memcpy(default_command->data, command, command_length);
         return OK;
     }
 
