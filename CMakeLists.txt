@@ -59,7 +59,7 @@ FIND_PACKAGE(fleet-protocol-cxx-helpers-static 1.1.1 REQUIRED)
 
 IF (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
 
-    FIND_PACKAGE(fleet-http-client-shared 1.3.0 REQUIRED)
+    FIND_PACKAGE(fleet-http-client-shared 1.5.0 REQUIRED)
     ### fleet-http-client dependencies
     FIND_PACKAGE(Boost REQUIRED)
     FIND_PACKAGE(cpprestsdk REQUIRED)
