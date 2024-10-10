@@ -3,8 +3,12 @@
 #include <cstring>
 #include <iostream>
 #include <string>
+#include <nlohmann/json.hpp>    
 
 // bringauto::modules::transparent_module::testing_module_manager
+
+using json = nlohmann::ordered_json;
+
 namespace bringauto::modules::transparent_module::devices::testing_device
 {
 
@@ -29,11 +33,14 @@ namespace bringauto::modules::transparent_module::devices::testing_device
 
     int testing_device_aggregate_status(buffer *aggregated_status, const buffer current_status, const buffer new_status)
     {
-        if (allocate(aggregated_status, new_status.size_in_bytes) == NOT_OK)
+        json j = std::string(static_cast<char *>(new_status.data), new_status.size_in_bytes);
+        std::string str = to_string(j);
+
+        if (allocate(aggregated_status, str.size()) == NOT_OK)
         {
             return NOT_OK;
         }
-        std::memcpy(aggregated_status->data, new_status.data, aggregated_status->size_in_bytes);
+        std::memcpy(aggregated_status->data, str.c_str(), str.size());
 
         return OK;
     }

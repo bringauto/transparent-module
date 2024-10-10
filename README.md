@@ -47,6 +47,10 @@ To send data from `http_api` to the module, use the following JSON structure:
 Where `device_id.name`, `device_id.role` and `device_id.type` have to be the same as the connected device.
 And in `payload.data` you can put any string you want to send.
 
+## Sending status
+
+The module represents all sent data as strings, including JSON objects. When sending a JSON, it is serialized (dumped) into a string format before being sent. This allows the module to handle all data types uniformly, ensuring flexibility.
+
 ## Example
 
 An example script, `example.py`, is provided in the `example` subdirectory. This script demonstrates how the module can be utilized for sending data between devices.
