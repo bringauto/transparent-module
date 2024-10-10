@@ -1,0 +1,2 @@
+git+https://github.com/bringauto/fleet-http-client-python.git
+git+https://github.com/bringauto/internal-client-python.git
