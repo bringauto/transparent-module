@@ -182,8 +182,7 @@ int forward_status(const buffer device_status, const device_identification devic
     try
     {
         std::string str = std::string(device_status_str.getStringView());
-        auto raw_str = R"(")" + str + R"(")";
-        con->fleet_api_client->sendStatus(raw_str);
+        con->fleet_api_client->sendStatus(str);
     }
     catch (std::exception &e)
     {
