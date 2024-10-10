@@ -182,11 +182,22 @@ int forward_status(const buffer device_status, const device_identification devic
     try
     {
         std::string str = std::string(device_status_str.getStringView());
-        con->fleet_api_client->sendStatus(str);
+
+        try
+        {
+            con->fleet_api_client->sendStatus(str);
+        }
+        catch (const std::exception &e)
+        {
+            std::cerr << e.what() << '\n';
+            return -33;
+        }
     }
     catch (std::exception &e)
     {
-        return NOT_OK;
+        std::cerr << e.what() << '\n';
+
+        return -22;
     }
 
 
