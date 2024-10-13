@@ -6,14 +6,11 @@
 #include <fleet_protocol/module_maintainer/external_server/external_server_interface.h>
 
 #include <iostream>
-#include <nlohmann/json.hpp>
 #include <regex>
 #include <string>
 #include <vector>
 
 using namespace std::chrono_literals;
-
-using json = nlohmann::ordered_json;
 
 void *init(const config config_data)
 {
