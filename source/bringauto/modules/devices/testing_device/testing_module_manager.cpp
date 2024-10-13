@@ -1,11 +1,10 @@
 #include <fleet_protocol/module_maintainer/module_gateway/module_manager.h>
 
+#include <nlohmann/json.hpp>    
+
 #include <cstring>
 #include <iostream>
 #include <string>
-#include <nlohmann/json.hpp>    
-
-// bringauto::modules::transparent_module::testing_module_manager
 
 using json = nlohmann::ordered_json;
 
