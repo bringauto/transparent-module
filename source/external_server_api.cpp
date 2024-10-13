@@ -5,9 +5,9 @@
 #include <bringauto/transparent_module_utils/external_server_api_structures.hpp>
 #include <fleet_protocol/module_maintainer/external_server/external_server_interface.h>
 
-#include <cstring>
 #include <iostream>
 #include <regex>
+#include <string>
 #include <vector>
 
 using namespace std::chrono_literals;
@@ -181,15 +181,14 @@ int forward_status(const buffer device_status, const device_identification devic
 
     try
     {
-        std::string str = std::string(device_status_str.getStringView());
-        auto raw_str = R"(")" + str + R"(")";
-        con->fleet_api_client->sendStatus(raw_str);
+        auto str = std::string(device_status_str.getStringView());
+
+        con->fleet_api_client->sendStatus(str);
     }
     catch (std::exception &e)
     {
         return NOT_OK;
     }
-
 
     con->con_variable.notify_one();
 
