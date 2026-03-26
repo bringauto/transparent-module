@@ -56,11 +56,13 @@ ENDIF ()
 
 FIND_PACKAGE(nlohmann_json 3.10.5 REQUIRED)
 FIND_PACKAGE(fleet-protocol-interface 2.0.0 REQUIRED)
-FIND_PACKAGE(fleet-protocol-cxx-helpers-static 1.1.1 REQUIRED)
+FIND_PACKAGE(aeron 1.48.6 REQUIRED)
+FIND_PACKAGE(async-function-execution-shared 1.0.0 REQUIRED)
+FIND_PACKAGE(fleet-protocol-cxx-helpers-static 1.2.0 REQUIRED)
 
 IF (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
 
-    FIND_PACKAGE(fleet-http-client-shared 1.5.0 REQUIRED)
+    FIND_PACKAGE(fleet-http-client-shared 2.0.1 REQUIRED)
     ### fleet-http-client dependencies
     FIND_PACKAGE(Boost CONFIG REQUIRED)
     FIND_PACKAGE(ZLIB REQUIRED)
