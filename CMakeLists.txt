@@ -58,7 +58,7 @@ IF (NOT BRINGAUTO_SYSTEM_DEP)
 ENDIF ()
 
 FIND_PACKAGE(nlohmann_json 3.10.5 REQUIRED)
-FIND_PACKAGE(fleet-protocol-interface 2.0.0 REQUIRED)
+FIND_PACKAGE(fleet-protocol-interface 2.1.0 REQUIRED)
 FIND_PACKAGE(aeron 1.48.6 REQUIRED)
 FIND_PACKAGE(async-function-execution-shared 1.0.0 REQUIRED)
 FIND_PACKAGE(fleet-protocol-cxx-helpers-static 1.2.0 REQUIRED)
