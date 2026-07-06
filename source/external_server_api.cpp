@@ -5,12 +5,96 @@
 #include <bringauto/transparent_module_utils/external_server_api_structures.hpp>
 #include <fleet_protocol/module_maintainer/external_server/external_server_interface.h>
 
+#include <algorithm>
+#include <chrono>
 #include <iostream>
+#include <optional>
 #include <regex>
 #include <string>
 #include <vector>
 
 using namespace std::chrono_literals;
+
+namespace
+{
+    namespace op = bringauto::transparent_module_utils::operator_stream;
+
+    /// Parse the quic_* config keys into a QuicOperatorServerConfig. Returns std::nullopt if
+    /// quic_port is absent/zero (BAF-1744: QUIC is opt-in alongside the existing Fleet HTTP API —
+    /// see the header comment on context::quic_server).
+    std::optional<op::QuicOperatorServerConfig> parseQuicConfig(
+        const bringauto::fleet_protocol::cxx::KeyValueConfig &config)
+    {
+        op::QuicOperatorServerConfig quicConfig{};
+        int port = 0;
+
+        for (auto i = config.cbegin(); i != config.cend(); ++i)
+        {
+            if (i->first == "quic_port")
+            {
+                try
+                {
+                    port = std::stoi(i->second);
+                }
+                catch (const std::exception &)
+                {
+                    std::cerr << "[transparent-module] init: invalid quic_port" << std::endl;
+                    return std::nullopt;
+                }
+            }
+            else if (i->first == "quic_cert_path")
+            {
+                quicConfig.certPath = i->second;
+            }
+            else if (i->first == "quic_key_path")
+            {
+                quicConfig.keyPath = i->second;
+            }
+            else if (i->first == "quic_ca_path")
+            {
+                quicConfig.caCertsPath = i->second;
+            }
+            else if (i->first == "quic_alpn")
+            {
+                quicConfig.alpn = i->second;
+            }
+            else if (i->first == "quic_listen_address")
+            {
+                quicConfig.listenAddress = i->second;
+            }
+            else if (i->first == "quic_disable_client_auth")
+            {
+                quicConfig.disableClientAuth = (i->second == "true" || i->second == "1");
+            }
+        }
+
+        if (port <= 0)
+        {
+            return std::nullopt; // QUIC not configured — caller falls back to Fleet HTTP API
+        }
+        if (port > 65535)
+        {
+            std::cerr << "[transparent-module] init: quic_port must be in range 1-65535" << std::endl;
+            return std::nullopt;
+        }
+        quicConfig.port = static_cast<std::uint16_t>(port);
+
+        if (quicConfig.certPath.empty() || quicConfig.keyPath.empty())
+        {
+            std::cerr << "[transparent-module] init: quic_port set but missing quic_cert_path/quic_key_path"
+                      << std::endl;
+            return std::nullopt;
+        }
+        if (!quicConfig.disableClientAuth && quicConfig.caCertsPath.empty())
+        {
+            std::cerr << "[transparent-module] init: quic_ca_path is required when client authentication is "
+                         "enabled (set quic_ca_path, or quic_disable_client_auth=true for dev/loopback)"
+                      << std::endl;
+            return std::nullopt;
+        }
+        return quicConfig;
+    }
+} // namespace
 
 void *init(const config config_data)
 {
@@ -145,6 +229,22 @@ void *init(const config config_data)
         fleet_api_config, request_frequency_guard_config);
 
     context->last_command_timestamp = 0;
+
+    // BAF-1744: QUIC operator transport is opt-in (present only if the config supplies quic_port) —
+    // when absent, forward_status()/wait_for_command() fall back to the Fleet HTTP API above unchanged.
+    if (auto quicConfig = parseQuicConfig(config))
+    {
+        context->quic_server =
+            std::make_unique<op::QuicOperatorServer>(std::move(*quicConfig), context->operator_channel);
+        if (!context->quic_server->initialize() || !context->quic_server->start())
+        {
+            std::cerr << "[transparent-module] init: QUIC operator server failed to initialize/start" << std::endl;
+            delete context;
+            return nullptr;
+        }
+        std::cerr << "[transparent-module] init: QUIC operator server enabled" << std::endl;
+    }
+
     return context;
 }
 
@@ -173,6 +273,20 @@ int forward_status(const buffer device_status, const device_identification devic
     bringauto::fleet_protocol::cxx::BufferAsString device_role(&device.device_role);
     bringauto::fleet_protocol::cxx::BufferAsString device_name(&device.device_name);
     bringauto::fleet_protocol::cxx::BufferAsString device_status_str(&device_status);
+
+    // BAF-1744: QUIC operator transport, when configured, replaces the Fleet HTTP API send below
+    // for this call — see context::quic_server's doc comment.
+    if (con->quic_server)
+    {
+        using SendResult = op::QuicOperatorServer::SendResult;
+        const auto sendResult = con->quic_server->sendStatus(
+            device.module, device.device_type, std::string(device_role.getStringView()),
+            std::string(device_name.getStringView()), static_cast<const std::uint8_t *>(device_status.data),
+            device_status.size_in_bytes, 0);
+        // NoOperator is an expected best-effort drop (nobody connected) — report OK so the ES does
+        // not treat a missing operator as a failure. A genuine send error is surfaced as NOT_OK.
+        return sendResult == SendResult::SendFailed ? NOT_OK : OK;
+    }
 
     con->fleet_api_client->setDeviceIdentification(bringauto::fleet_protocol::cxx::DeviceID(
         device.module, device.device_type,
@@ -241,6 +355,10 @@ int device_disconnected(const int disconnect_type, const device_identification d
     const std::string_view device_device_name(static_cast<char *>(device.device_name.data),
                                               device.device_name.size_in_bytes);
 
+    // BAF-1744: con->mutex now also guards con->devices for wait_for_command()'s QUIC branch,
+    // which reads it from a different thread — this lock did not need to exist before that read
+    // was added.
+    std::lock_guard lock(con->mutex);
     for (auto it = con->devices.begin(); it != con->devices.end(); it++)
     {
         const std::string_view it_device_role(static_cast<char *>(it->device_role.data), it->device_role.size_in_bytes);
@@ -289,6 +407,8 @@ int device_connected(const device_identification device, void *context)
     }
     std::memcpy(new_device.device_name.data, device.device_name.data, new_device.device_name.size_in_bytes);
 
+    // BAF-1744: see the matching lock in device_disconnected() for why this is needed now.
+    std::lock_guard lock(con->mutex);
     con->devices.emplace_back(new_device);
     return OK;
 }
@@ -301,6 +421,42 @@ int wait_for_command(int timeout_time_in_ms, void *context)
     }
 
     auto con = static_cast<struct bringauto::transparent_module_utils::context *>(context);
+
+    // BAF-1744: QUIC operator transport, when configured, replaces the Fleet HTTP polling below —
+    // see context::quic_server's doc comment.
+    if (con->quic_server)
+    {
+        constexpr int kDefaultWaitTimeoutMs = 1000;
+        const int effectiveTimeoutMs = timeout_time_in_ms > 0 ? timeout_time_in_ms : kDefaultWaitTimeoutMs;
+        auto command = con->operator_channel.waitForCommand(std::chrono::milliseconds(effectiveTimeoutMs));
+        if (!command.has_value())
+        {
+            return TIMEOUT_OCCURRED;
+        }
+
+        std::lock_guard lock(con->mutex);
+        // Transparent module doesn't discriminate by device_type (see its README: "All device
+        // numbers are valid but do not affect the module's function") — route to the first
+        // connected device on the addressed module.
+        auto target = std::find_if(con->devices.begin(), con->devices.end(), [&](const device_identification &dev) {
+            return static_cast<std::uint32_t>(dev.module) == command->module_id;
+        });
+        if (target == con->devices.end())
+        {
+            std::cerr << "[transparent-module] wait_for_command: operator command for module="
+                      << command->module_id << " but no matching device connected, dropping" << std::endl;
+            return TIMEOUT_OCCURRED;
+        }
+
+        bringauto::fleet_protocol::cxx::BufferAsString targetRole(&target->device_role);
+        bringauto::fleet_protocol::cxx::BufferAsString targetName(&target->device_name);
+        std::string payload(command->payload.begin(), command->payload.end());
+        con->command_vector.emplace_back(
+            std::move(payload), bringauto::fleet_protocol::cxx::DeviceID(
+                                     target->module, target->device_type, target->priority,
+                                     std::string(targetRole.getStringView()), std::string(targetName.getStringView())));
+        return OK;
+    }
 
     std::unique_lock lock(con->mutex);
     std::pair<std::vector<std::shared_ptr<org::openapitools::client::model::Message>>,

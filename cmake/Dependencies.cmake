@@ -11,5 +11,8 @@ IF (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
     BA_PACKAGE_LIBRARY(boost         v1.86.0)
     BA_PACKAGE_LIBRARY(cpprestsdk    v2.10.20)
     BA_PACKAGE_LIBRARY(zlib                                 v1.3.2)
+    # Operator-facing QUIC transport (BAF-1744, ported from teleop-module's BAF-1670). Wire
+    # format is plain JSON (nlohmann-json above), not protobuf.
+    BA_PACKAGE_LIBRARY(msquic                                v2.5.6)
 
 ENDIF ()

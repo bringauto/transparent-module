@@ -70,6 +70,12 @@ IF (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
     FIND_PACKAGE(Boost CONFIG REQUIRED)
     FIND_PACKAGE(ZLIB REQUIRED)
     FIND_PACKAGE(cpprestsdk REQUIRED)
+
+    # Operator-facing QUIC transport (BAF-1744), opt-in alongside the Fleet HTTP API above —
+    # ported from teleop-module's equivalent (BAF-1670). Wire format is plain JSON
+    # (nlohmann::json, already a dependency above), not protobuf — see QuicOperatorServer's
+    # class doc comment for why.
+    FIND_PACKAGE(msquic CONFIG REQUIRED)
 ENDIF ()
 
 CMDEF_ADD_LIBRARY(
@@ -117,6 +123,8 @@ IF (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
             LIBRARY_GROUP transparent-external-server
             TYPE SHARED
             SOURCES "source/external_server_api.cpp" "source/memory_management.cpp" "source/device_management.cpp"
+            "source/transparent_operator_stream/OperatorChannel.cpp"
+            "source/transparent_operator_stream/QuicOperatorServer.cpp"
             VERSION ${TRANSPARENT_MODULE_VERSION}
     )
     # Explicitly add Boost dependencies due to obsolete cpprestsdk cmake export package
@@ -130,6 +138,7 @@ IF (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
             PRIVATE
             transparent_module_sources
             fleet-http-client-shared::fleet-http-client-shared
+            msquic
             PUBLIC
             fleet-protocol-interface::module-maintainer-external-server-interface
     )
