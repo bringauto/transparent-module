@@ -72,10 +72,13 @@ IF (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
     FIND_PACKAGE(cpprestsdk REQUIRED)
 
     # Operator-facing QUIC transport (BAF-1744), opt-in alongside the Fleet HTTP API above —
-    # ported from teleop-module's equivalent (BAF-1670). Wire format is plain JSON
-    # (nlohmann::json, already a dependency above), not protobuf — see QuicOperatorServer's
-    # class doc comment for why.
+    # ported from teleop-module's equivalent (BAF-1670): msquic + protobuf for the operator
+    # stream wire protocol (own proto/transparent_operator_stream.proto — see its file header
+    # for why it can't share teleop-module's operator_stream.proto).
     FIND_PACKAGE(msquic CONFIG REQUIRED)
+    FIND_PACKAGE(Protobuf REQUIRED)
+    PROTOBUF_GENERATE_CPP(TRANSPARENT_OPERATOR_PROTO_SRCS TRANSPARENT_OPERATOR_PROTO_HDRS
+            proto/transparent_operator_stream.proto)
 ENDIF ()
 
 CMDEF_ADD_LIBRARY(
@@ -125,8 +128,11 @@ IF (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
             SOURCES "source/external_server_api.cpp" "source/memory_management.cpp" "source/device_management.cpp"
             "source/transparent_operator_stream/OperatorChannel.cpp"
             "source/transparent_operator_stream/QuicOperatorServer.cpp"
+            ${TRANSPARENT_OPERATOR_PROTO_SRCS}
             VERSION ${TRANSPARENT_MODULE_VERSION}
     )
+    # Generated transparent_operator_stream.pb.h lands in the binary dir.
+    TARGET_INCLUDE_DIRECTORIES(transparent-external-server-shared PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
     # Explicitly add Boost dependencies due to obsolete cpprestsdk cmake export package
     TARGET_LINK_LIBRARIES(fleet-http-client-shared::fleet-http-client-shared
             INTERFACE
@@ -139,6 +145,7 @@ IF (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
             transparent_module_sources
             fleet-http-client-shared::fleet-http-client-shared
             msquic
+            protobuf::libprotobuf
             PUBLIC
             fleet-protocol-interface::module-maintainer-external-server-interface
     )

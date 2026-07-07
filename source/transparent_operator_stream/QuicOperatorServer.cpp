@@ -1,8 +1,8 @@
 #include <bringauto/transparent_module_utils/operator_stream/QuicOperatorServer.hpp>
 
-#include <msquicp.h> // QuicAddrSetFamily / QuicAddrSetPort helpers
+#include "transparent_operator_stream.pb.h"
 
-#include <nlohmann/json.hpp>
+#include <msquicp.h> // QuicAddrSetFamily / QuicAddrSetPort helpers
 
 #include <iostream>
 #include <memory>
@@ -197,27 +197,19 @@ QuicOperatorServer::SendResult QuicOperatorServer::sendStatus(std::uint32_t modu
 		return SendResult::NoOperator; // no operator connected — drop (best-effort)
 	}
 
-	// payload is opaque bytes that happen to already be JSON text almost always (see the class doc
-	// comment) — embed it as a nested JSON value so the wire form has no extra string-escaping
-	// layer, falling back to a plain string if it genuinely isn't valid JSON.
-	nlohmann::json envelope;
-	envelope["kind"] = "status";
-	envelope["device"] = {{"module_id", module_id}, {"type", device_type}, {"role", device_role}, {"name", device_name}};
-	envelope["timestamp_ms"] = timestamp_ms;
-	try {
-		envelope["payload"] = nlohmann::json::parse(payload, payload + payload_size);
-	} catch (const nlohmann::json::exception &) {
-		envelope["payload"] = std::string(reinterpret_cast<const char *>(payload), payload_size);
-	}
+	bringauto::transparent::operator_stream::OperatorMessage message;
+	auto *status = message.mutable_status();
+	auto *device = status->mutable_device();
+	device->set_module_id(module_id);
+	device->set_type(device_type);
+	device->set_role(device_role);
+	device->set_name(device_name);
+	status->set_payload(payload, payload_size);
+	status->set_timestamp_ms(timestamp_ms);
 
 	std::string serialized;
-	try {
-		// replace (not the default strict): the non-JSON fallback above can embed arbitrary bytes as
-		// a JSON string, and strict dump() throws on invalid UTF-8 in that string, dropping the whole
-		// status. replace swaps invalid sequences for U+FFFD instead of failing the send.
-		serialized = envelope.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-	} catch (const nlohmann::json::exception &e) {
-		logError(std::string("QUIC operator server: failed to serialize status, dropping: ") + e.what());
+	if (!message.SerializeToString(&serialized)) {
+		logError("QUIC operator server: failed to serialize status, dropping");
 		return SendResult::SendFailed;
 	}
 
@@ -256,43 +248,26 @@ QuicOperatorServer::SendResult QuicOperatorServer::sendStatus(std::uint32_t modu
 }
 
 void QuicOperatorServer::handleCommandBytes(const std::string &bytes) {
-	nlohmann::json envelope;
-	try {
-		envelope = nlohmann::json::parse(bytes);
-	} catch (const nlohmann::json::exception &e) {
-		logWarning("QUIC operator server: failed to parse command JSON (" + std::to_string(bytes.size()) +
-				   " bytes): " + e.what());
+	bringauto::transparent::operator_stream::OperatorMessage message;
+	if (!message.ParseFromString(bytes)) {
+		logWarning("QUIC operator server: failed to parse OperatorMessage (" + std::to_string(bytes.size()) +
+				   " bytes), dropping");
 		return;
 	}
-	// Every field access below can throw nlohmann::json::type_error if a field is present but has
-	// the wrong JSON type (e.g. "device" is a string, not an object) — this function is invoked
-	// from commandStreamCallback, a QUIC_API callback handed directly to msquic's C library, which
-	// is not exception-safe: an uncaught exception here would unwind into msquic and terminate the
-	// whole external-server process for every device on the module, not just this connection.
-	try {
-		if (!envelope.is_object() || envelope.value("kind", std::string{}) != "command") {
-			// Malformed, or "hello" — ignored for now (single operator, always active).
-			return;
-		}
-
-		const auto deviceIt = envelope.find("device");
-		const nlohmann::json &device = deviceIt != envelope.end() ? *deviceIt : nlohmann::json::object();
-
-		OperatorCommand out;
-		out.timestamp_ms = envelope.value("timestamp_ms", static_cast<std::int64_t>(0));
-		out.module_id = device.value("module_id", 0u);
-		out.device_type = device.value("type", 0u);
-		out.device_role = device.value("role", std::string{});
-		out.device_name = device.value("name", std::string{});
-		// The BAF-1651 envelope was embedded as a nested JSON value by the sender — re-serialize it
-		// back to bytes here, since OperatorCommand::payload and its downstream consumers (e.g.
-		// pop_command()) expect a flat JSON string, not a parsed value.
-		const std::string payloadStr = envelope.contains("payload") ? envelope["payload"].dump() : std::string("{}");
-		out.payload.assign(payloadStr.begin(), payloadStr.end());
-		channel_.push(std::move(out));
-	} catch (const nlohmann::json::exception &e) {
-		logWarning(std::string("QUIC operator server: malformed command envelope field(s), dropping: ") + e.what());
+	if (!message.has_command()) {
+		// Malformed, or Hello — ignored for now (single operator, always active).
+		return;
 	}
+	const auto &command = message.command();
+	OperatorCommand out;
+	const auto &payload = command.payload();
+	out.payload.assign(payload.begin(), payload.end());
+	out.timestamp_ms = command.timestamp_ms();
+	out.module_id = command.device().module_id();
+	out.device_type = command.device().type();
+	out.device_role = command.device().role();
+	out.device_name = command.device().name();
+	channel_.push(std::move(out));
 }
 
 QUIC_STATUS QUIC_API QuicOperatorServer::listenerCallback(HQUIC listener, void *context, QUIC_LISTENER_EVENT *event) {

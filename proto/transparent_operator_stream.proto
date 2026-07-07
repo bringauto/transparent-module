@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+// GUI <-> transparent-module QUIC stream protocol (BAF-1744), modeled on teleop-module's
+// operator_stream.proto (BAF-1670) — same message shapes, but its own package/file: external-server-cpp
+// dlopens both teleop-external-server-shared.so and transparent-external-server-shared.so into the
+// same process, and protobuf's generated-descriptor registry is process-global, so two .so's
+// registering the same .proto file/package would crash. A distinct package avoids that collision.
+//
+// Transport: each message travels on its own UNIDIRECTIONAL QUIC stream between the GUI (client)
+// and transparent-module's external-server plugin (server). The sender opens a stream, writes the
+// serialized OperatorMessage, and closes it with FIN — the stream boundary frames the message, so
+// there is NO length prefix and one stream carries exactly one OperatorMessage.
+//
+// Direction:
+//   rtsp-server -> GUI : StatusUpdate   (device-reported status / BAF-1651 response envelope)
+//   GUI -> rtsp-server  : CommandRequest (a BAF-1651 command envelope)
+//
+// The BAF-1651 JSON envelope ({type, version, action, id, timestamp, payload}) is passed through
+// VERBATIM as opaque bytes — this protocol only carries the Fleet Protocol device_id + timestamp
+// needed to route the message, and stays decoupled from the BAF-1651 schema.
+// NB: `operator_stream`, not `operator` — `operator` is a C++ keyword (invalid generated namespace).
+package bringauto.transparent.operator_stream;
+
+// Fleet-protocol device coordinates of the addressed device (module 3 / type 1 / role rtsp_server).
+message DeviceId {
+    uint32 module_id = 1;
+    uint32 type      = 2;
+    string role      = 3;
+    string name      = 4;
+}
+
+// rtsp-server -> GUI: one status/response push.
+message StatusUpdate {
+    DeviceId device       = 1;
+    bytes    payload      = 2;   // opaque BAF-1651 JSON envelope
+    int64    timestamp_ms = 3;
+}
+
+// GUI -> rtsp-server: one streaming-control command.
+message CommandRequest {
+    DeviceId device       = 1;
+    bytes    payload      = 2;   // opaque BAF-1651 JSON envelope
+    int64    timestamp_ms = 3;
+}
+
+// GUI -> rtsp-server: sent once on connect. Single-operator (Phase 1 of the pattern this was
+// ported from) — contents ignored for now.
+message OperatorHello {
+    string operator_id = 1;
+}
+
+message OperatorMessage {
+    oneof kind {
+        OperatorHello  hello   = 1;   // GUI -> rtsp-server
+        StatusUpdate   status  = 2;   // rtsp-server -> GUI
+        CommandRequest command = 3;   // GUI -> rtsp-server
+    }
+}

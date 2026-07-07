@@ -30,18 +30,18 @@ struct QuicOperatorServerConfig {
  * the operator leg, used alongside (not instead of) the existing Fleet HTTP API path (BAF-1744;
  * ported from teleop-module's QuicOperatorServer, BAF-1670, single-operator Phase 1).
  *
- * Wire format is plain JSON (nlohmann::json), not protobuf: QUIC is just a transport, and this
- * module's whole design already treats every payload as opaque JSON text (see its README), so a
- * protobuf envelope around that JSON would be pure overhead — plus teleop-module's equivalent
- * class, which this was ported from, needs its own .proto file distinct from ours anyway (same
- * external-server-cpp process, process-global protobuf descriptor pool), a problem plain JSON
- * doesn't have at all. Envelope shape: {"kind": "hello"|"status"|"command", "device": {"module_id",
- * "type", "role", "name"}, "timestamp_ms": <int64>, "payload": <the opaque BAF-1651 JSON envelope>}.
+ * Wire format is protobuf (proto/transparent_operator_stream.proto's OperatorMessage), matching
+ * teleop-module's QuicOperatorServer this was ported from — but its own .proto/package, since
+ * external-server-cpp dlopens both teleop-external-server-shared.so and
+ * transparent-external-server-shared.so into the same process, and protobuf's generated-descriptor
+ * registry is process-global: two .so's registering the same .proto file/package would crash. The
+ * BAF-1651 JSON envelope itself still rides as opaque `bytes` inside OperatorMessage's
+ * StatusUpdate/CommandRequest — this class stays decoupled from that schema.
  *
- *   cloud -> operator : sendStatus() opens a short unidirectional stream per envelope{kind:status}
+ *   cloud -> operator : sendStatus() opens a short unidirectional stream per OperatorMessage{status}
  *                       (START|FIN), freeing the send buffer on SEND_COMPLETE.
  *   operator -> cloud : each operator command arrives as a unidirectional stream; the receive
- *                       callback accumulates the bytes, parses envelope{kind:command}, and hands
+ *                       callback accumulates the bytes, parses OperatorMessage{command}, and hands
  *                       it to the OperatorChannel (which unblocks the module's wait_for_command()).
  *
  * Threading: msquic invokes the callbacks on its own worker thread(s). Commands cross into the
