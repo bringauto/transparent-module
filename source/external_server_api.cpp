@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <chrono>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <regex>
 #include <string>
@@ -279,10 +280,13 @@ int forward_status(const buffer device_status, const device_identification devic
     if (con->quic_server)
     {
         using SendResult = op::QuicOperatorServer::SendResult;
+        const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::system_clock::now().time_since_epoch())
+                                .count();
         const auto sendResult = con->quic_server->sendStatus(
             device.module, device.device_type, std::string(device_role.getStringView()),
             std::string(device_name.getStringView()), static_cast<const std::uint8_t *>(device_status.data),
-            device_status.size_in_bytes, 0);
+            device_status.size_in_bytes, static_cast<std::int64_t>(nowMs));
         // NoOperator is an expected best-effort drop (nobody connected) — report OK so the ES does
         // not treat a missing operator as a failure. A genuine send error is surfaced as NOT_OK.
         return sendResult == SendResult::SendFailed ? NOT_OK : OK;
@@ -356,9 +360,16 @@ int device_disconnected(const int disconnect_type, const device_identification d
                                               device.device_name.size_in_bytes);
 
     // BAF-1744: con->mutex now also guards con->devices for wait_for_command()'s QUIC branch,
-    // which reads it from a different thread — this lock did not need to exist before that read
-    // was added.
-    std::lock_guard lock(con->mutex);
+    // which reads it from a different thread — but only take it when QUIC is actually configured
+    // for this context. wait_for_command()'s non-QUIC/Fleet-HTTP branch holds this same mutex
+    // across a blocking con->fleet_api_client->getCommands() call; locking unconditionally here
+    // would add that stall to every (dis)connect event even in deployments that never use QUIC,
+    // where con->devices has no concurrent reader at all.
+    std::unique_lock<std::mutex> lock(con->mutex, std::defer_lock);
+    if (con->quic_server)
+    {
+        lock.lock();
+    }
     for (auto it = con->devices.begin(); it != con->devices.end(); it++)
     {
         const std::string_view it_device_role(static_cast<char *>(it->device_role.data), it->device_role.size_in_bytes);
@@ -407,8 +418,12 @@ int device_connected(const device_identification device, void *context)
     }
     std::memcpy(new_device.device_name.data, device.device_name.data, new_device.device_name.size_in_bytes);
 
-    // BAF-1744: see the matching lock in device_disconnected() for why this is needed now.
-    std::lock_guard lock(con->mutex);
+    // BAF-1744: see the matching lock in device_disconnected() for why this is conditional.
+    std::unique_lock<std::mutex> lock(con->mutex, std::defer_lock);
+    if (con->quic_server)
+    {
+        lock.lock();
+    }
     con->devices.emplace_back(new_device);
     return OK;
 }
