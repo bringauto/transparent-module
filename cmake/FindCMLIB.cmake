@@ -83,7 +83,10 @@ endif()
 
 if(NOT COMMAND CMDEF_PACKAGE)
     macro(CMDEF_PACKAGE)
-        # no-op in FetchContent context
+        cmake_parse_arguments(_cmdef_pkg "" "MAIN_TARGET;VERSION" "" ${ARGN})
+        if(_cmdef_pkg_VERSION)
+            set(CPACK_PACKAGE_VERSION "${_cmdef_pkg_VERSION}")
+        endif()
     endmacro()
 endif()
 
