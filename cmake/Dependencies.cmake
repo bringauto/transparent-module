@@ -1,15 +1,17 @@
-SET(CMAKE_FIND_USE_CMAKE_SYSTEM_PATH FALSE)
+find_package(BANlohmannJson REQUIRED)
+# fleet-protocol-interface's internal protobuf fetch is a no-op under our
+# FindCMLIB.cmake shim (BA_PACKAGE_LIBRARY does nothing) — resolve protobuf::libprotobuf
+# ourselves first so FindBAFleetProtocolInterface.cmake's link-libraries fixup has
+# a real target to attach to. Same fix BAF-1706 needed in external-server-cpp.
+find_package(BAProtobuf REQUIRED)
+find_package(BAFleetProtocolInterface REQUIRED)
+find_package(BAAeron REQUIRED)
+find_package(BAAsyncFunctionExecution REQUIRED)
+find_package(BAFleetProtocolCpp REQUIRED)
 
-BA_PACKAGE_LIBRARY(nlohmann-json            v3.12.0 NO_DEBUG ON)
-BA_PACKAGE_LIBRARY(fleet-protocol-cpp       v1.2.0)
-BA_PACKAGE_LIBRARY(async-function-execution v1.0.0)
-BA_PACKAGE_LIBRARY(aeron                   v1.48.6)
-BA_PACKAGE_LIBRARY(fleet-protocol-interface v2.1.0 NO_DEBUG ON)
-
-IF (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
-    BA_PACKAGE_LIBRARY(fleet-http-client-shared             v2.0.2)
-    BA_PACKAGE_LIBRARY(boost         v1.86.0)
-    BA_PACKAGE_LIBRARY(cpprestsdk    v2.10.20)
-    BA_PACKAGE_LIBRARY(zlib                                 v1.3.2)
-
-ENDIF ()
+if (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
+    find_package(BABoost REQUIRED)
+    find_package(BAZlib REQUIRED)
+    find_package(BACppRestSdk REQUIRED)
+    find_package(BAFleetHttpClient REQUIRED)
+endif ()
