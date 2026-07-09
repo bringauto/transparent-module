@@ -19,7 +19,7 @@ constexpr std::string_view APP_NAME{"transparent-operator-server"};
 constexpr std::size_t MAX_COMMAND_FRAME_BYTES{64U * 1024U};
 
 // This module has no logging infrastructure of its own (unlike teleop-module's EsLogger, which
-// this class is ported from) — plain stderr lines are enough for this bring-up (BAF-1744).
+// this class is ported from) — plain stderr lines are enough for this bring-up.
 void logInfo(const std::string &msg) { std::cerr << "[transparent-quic] INFO: " << msg << std::endl; }
 void logWarning(const std::string &msg) { std::cerr << "[transparent-quic] WARN: " << msg << std::endl; }
 void logError(const std::string &msg) { std::cerr << "[transparent-quic] ERROR: " << msg << std::endl; }

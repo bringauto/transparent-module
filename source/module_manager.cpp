@@ -46,7 +46,7 @@ int command_data_valid(const buffer command, unsigned int device_type)
     return td::testing_device_command_data_valid(command);
 }
 
-// BAF-1744: opt into MG's push-only forwarding (mirrors teleop-module/source/module_manager.cpp).
+// Opt into MG's push-only forwarding (mirrors teleop-module/source/module_manager.cpp).
 // Without this, MG's default fallback (fleet_protocol/module_maintainer/module_gateway/
 // module_manager.h's forward_command_on_receive doc comment) re-invokes generate_command() with
 // the same current_command on every single DeviceStatus when there's nothing new queued from the

@@ -71,8 +71,8 @@ IF (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
     FIND_PACKAGE(ZLIB REQUIRED)
     FIND_PACKAGE(cpprestsdk REQUIRED)
 
-    # Operator-facing QUIC transport (BAF-1744), opt-in alongside the Fleet HTTP API above —
-    # ported from teleop-module's equivalent (BAF-1670): msquic + protobuf for the operator
+    # Operator-facing QUIC transport, opt-in alongside the Fleet HTTP API above —
+    # ported from teleop-module's equivalent: msquic + protobuf for the operator
     # stream wire protocol (own proto/transparent_operator_stream.proto — see its file header
     # for why it can't share teleop-module's operator_stream.proto).
     FIND_PACKAGE(msquic CONFIG REQUIRED)

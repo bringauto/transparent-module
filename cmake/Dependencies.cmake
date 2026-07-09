@@ -11,7 +11,7 @@ IF (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
     BA_PACKAGE_LIBRARY(boost         v1.86.0)
     BA_PACKAGE_LIBRARY(cpprestsdk    v2.10.20)
     BA_PACKAGE_LIBRARY(zlib                                 v1.3.2)
-    # Operator-facing QUIC transport (BAF-1744, ported from teleop-module's BAF-1670): msquic +
+    # Operator-facing QUIC transport, ported from teleop-module's equivalent: msquic +
     # protobuf for the operator stream protocol (own .proto — see its file header for why it can't
     # share teleop-module's).
     BA_PACKAGE_LIBRARY(msquic                                v2.5.6)

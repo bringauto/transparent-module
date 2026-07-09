@@ -12,11 +12,11 @@ namespace bringauto::transparent_module_utils::operator_stream {
 
 /**
  * One command received from an operator over QUIC, handed across the thread boundary to the
- * synchronous ES API. `payload` is the opaque command buffer (today: the BAF-1651 JSON envelope)
- * passed through verbatim; device_* are the fleet-protocol device coordinates kept for routing.
+ * synchronous ES API. `payload` is the opaque command buffer (today: the streaming-control JSON
+ * envelope) passed through verbatim; device_* are the fleet-protocol device coordinates kept for routing.
  *
- * Ported from teleop-module's OperatorChannel (BAF-1670) for the Transparent module's QUIC
- * operator transport (BAF-1744) — see that repo's equivalent file for the original design notes.
+ * Ported from teleop-module's OperatorChannel for the Transparent module's QUIC
+ * operator transport — see that repo's equivalent file for the original design notes.
  */
 struct OperatorCommand {
 	std::vector<std::uint8_t> payload;

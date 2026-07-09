@@ -21,7 +21,7 @@ namespace
     namespace op = bringauto::transparent_module_utils::operator_stream;
 
     /// Parse the quic_* config keys into a QuicOperatorServerConfig. Returns std::nullopt if
-    /// quic_port is absent/zero (BAF-1744: QUIC is opt-in alongside the existing Fleet HTTP API —
+    /// quic_port is absent/zero (QUIC is opt-in alongside the existing Fleet HTTP API —
     /// see the header comment on context::quic_server).
     std::optional<op::QuicOperatorServerConfig> parseQuicConfig(
         const bringauto::fleet_protocol::cxx::KeyValueConfig &config)
@@ -231,7 +231,7 @@ void *init(const config config_data)
 
     context->last_command_timestamp = 0;
 
-    // BAF-1744: QUIC operator transport is opt-in (present only if the config supplies quic_port) —
+    // QUIC operator transport is opt-in (present only if the config supplies quic_port) —
     // when absent, forward_status()/wait_for_command() fall back to the Fleet HTTP API above unchanged.
     if (auto quicConfig = parseQuicConfig(config))
     {
@@ -275,7 +275,7 @@ int forward_status(const buffer device_status, const device_identification devic
     bringauto::fleet_protocol::cxx::BufferAsString device_name(&device.device_name);
     bringauto::fleet_protocol::cxx::BufferAsString device_status_str(&device_status);
 
-    // BAF-1744: QUIC operator transport, when configured, replaces the Fleet HTTP API send below
+    // QUIC operator transport, when configured, replaces the Fleet HTTP API send below
     // for this call — see context::quic_server's doc comment.
     if (con->quic_server)
     {
@@ -359,7 +359,7 @@ int device_disconnected(const int disconnect_type, const device_identification d
     const std::string_view device_device_name(static_cast<char *>(device.device_name.data),
                                               device.device_name.size_in_bytes);
 
-    // BAF-1744: con->mutex now also guards con->devices for wait_for_command()'s QUIC branch,
+    // con->mutex now also guards con->devices for wait_for_command()'s QUIC branch,
     // which reads it from a different thread — but only take it when QUIC is actually configured
     // for this context. wait_for_command()'s non-QUIC/Fleet-HTTP branch holds this same mutex
     // across a blocking con->fleet_api_client->getCommands() call; locking unconditionally here
@@ -418,7 +418,7 @@ int device_connected(const device_identification device, void *context)
     }
     std::memcpy(new_device.device_name.data, device.device_name.data, new_device.device_name.size_in_bytes);
 
-    // BAF-1744: see the matching lock in device_disconnected() for why this is conditional.
+    // See the matching lock in device_disconnected() for why this is conditional.
     std::unique_lock<std::mutex> lock(con->mutex, std::defer_lock);
     if (con->quic_server)
     {
@@ -437,7 +437,7 @@ int wait_for_command(int timeout_time_in_ms, void *context)
 
     auto con = static_cast<struct bringauto::transparent_module_utils::context *>(context);
 
-    // BAF-1744: QUIC operator transport, when configured, replaces the Fleet HTTP polling below —
+    // QUIC operator transport, when configured, replaces the Fleet HTTP polling below —
     // see context::quic_server's doc comment.
     if (con->quic_server)
     {

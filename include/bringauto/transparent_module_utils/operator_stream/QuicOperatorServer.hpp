@@ -27,15 +27,15 @@ struct QuicOperatorServerConfig {
 
 /**
  * Operator-facing QUIC server living inside the Transparent module's external-server plugin —
- * the operator leg, used alongside (not instead of) the existing Fleet HTTP API path (BAF-1744;
- * ported from teleop-module's QuicOperatorServer, BAF-1670, single-operator Phase 1).
+ * the operator leg, used alongside (not instead of) the existing Fleet HTTP API path;
+ * ported from teleop-module's QuicOperatorServer, single-operator Phase 1.
  *
  * Wire format is protobuf (proto/transparent_operator_stream.proto's OperatorMessage), matching
  * teleop-module's QuicOperatorServer this was ported from — but its own .proto/package, since
  * external-server-cpp dlopens both teleop-external-server-shared.so and
  * transparent-external-server-shared.so into the same process, and protobuf's generated-descriptor
  * registry is process-global: two .so's registering the same .proto file/package would crash. The
- * BAF-1651 JSON envelope itself still rides as opaque `bytes` inside OperatorMessage's
+ * The streaming-control JSON envelope itself still rides as opaque `bytes` inside OperatorMessage's
  * StatusUpdate/CommandRequest — this class stays decoupled from that schema.
  *
  *   cloud -> operator : sendStatus() opens a short unidirectional stream per OperatorMessage{status}
