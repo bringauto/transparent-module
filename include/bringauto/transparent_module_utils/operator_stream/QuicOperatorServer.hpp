@@ -7,7 +7,9 @@
 #include <atomic>
 #include <cstdint>
 #include <mutex>
+#include <span>
 #include <string>
+#include <string_view>
 
 namespace bringauto::transparent_module_utils::operator_stream {
 
@@ -50,17 +52,22 @@ struct QuicOperatorServerConfig {
  */
 class QuicOperatorServer {
 public:
+	/// Construct with the given config and channel; does not start listening (see start()).
 	QuicOperatorServer(QuicOperatorServerConfig config, OperatorChannel &channel);
+	/// Stops the listener and drops any operator connection if still running.
 	~QuicOperatorServer();
 
 	QuicOperatorServer(const QuicOperatorServer &) = delete;
 	QuicOperatorServer &operator=(const QuicOperatorServer &) = delete;
 
-	/// Open msquic, registration, configuration, credential (mTLS), and the listener. False on any failure.
-	[[nodiscard]] bool initialize();
+	/// Outcome of initialize()/start().
+	enum class InitResult { Ok, Failed };
 
-	/// Start the listener. False on failure.
-	[[nodiscard]] bool start();
+	/// Open msquic, registration, configuration, credential (mTLS), and the listener.
+	[[nodiscard]] InitResult initialize();
+
+	/// Start the listener.
+	[[nodiscard]] InitResult start();
 
 	/// Stop the listener + drop the operator connection.
 	void stop();
@@ -71,10 +78,11 @@ public:
 
 	/// Send one status to the connected operator (best-effort: NoOperator if none). Called from the
 	/// ES thread. payload is the opaque status buffer (today: JSON); device_* are the fleet-protocol coords.
-	SendResult sendStatus(std::uint32_t module_id, std::uint32_t device_type, const std::string &device_role,
-						  const std::string &device_name, const std::uint8_t *payload, std::size_t payload_size,
+	SendResult sendStatus(std::uint32_t module_id, std::uint32_t device_type, std::string_view device_role,
+						  std::string_view device_name, std::span<const std::uint8_t> payload,
 						  std::int64_t timestamp_ms);
 
+	/// True while an operator is currently connected.
 	[[nodiscard]] bool hasOperator() const { return operatorConnection_.load() != nullptr; }
 
 private:

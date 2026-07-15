@@ -11,6 +11,7 @@
 #include <mutex>
 #include <optional>
 #include <regex>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -19,6 +20,19 @@ using namespace std::chrono_literals;
 namespace
 {
     namespace op = bringauto::transparent_module_utils::operator_stream;
+
+    /// Parse a quic_port string into a port number. Returns std::nullopt if it is not a valid integer.
+    std::optional<int> parseQuicPort(const std::string &value)
+    {
+        try
+        {
+            return std::stoi(value);
+        }
+        catch (const std::exception &)
+        {
+            return std::nullopt;
+        }
+    }
 
     /// Parse the quic_* config keys into a QuicOperatorServerConfig. Returns std::nullopt if
     /// quic_port is absent/zero (QUIC is opt-in alongside the existing Fleet HTTP API —
@@ -33,15 +47,13 @@ namespace
         {
             if (i->first == "quic_port")
             {
-                try
-                {
-                    port = std::stoi(i->second);
-                }
-                catch (const std::exception &)
+                const auto parsedPort = parseQuicPort(i->second);
+                if (!parsedPort)
                 {
                     std::cerr << "[transparent-module] init: invalid quic_port" << std::endl;
                     return std::nullopt;
                 }
+                port = *parsedPort;
             }
             else if (i->first == "quic_cert_path")
             {
@@ -237,7 +249,8 @@ void *init(const config config_data)
     {
         context->quic_server =
             std::make_unique<op::QuicOperatorServer>(std::move(*quicConfig), context->operator_channel);
-        if (!context->quic_server->initialize() || !context->quic_server->start())
+        using InitResult = op::QuicOperatorServer::InitResult;
+        if (context->quic_server->initialize() != InitResult::Ok || context->quic_server->start() != InitResult::Ok)
         {
             std::cerr << "[transparent-module] init: QUIC operator server failed to initialize/start" << std::endl;
             delete context;
@@ -284,9 +297,10 @@ int forward_status(const buffer device_status, const device_identification devic
                                 std::chrono::system_clock::now().time_since_epoch())
                                 .count();
         const auto sendResult = con->quic_server->sendStatus(
-            device.module, device.device_type, std::string(device_role.getStringView()),
-            std::string(device_name.getStringView()), static_cast<const std::uint8_t *>(device_status.data),
-            device_status.size_in_bytes, static_cast<std::int64_t>(nowMs));
+            device.module, device.device_type, device_role.getStringView(), device_name.getStringView(),
+            std::span<const std::uint8_t>(static_cast<const std::uint8_t *>(device_status.data),
+                                           device_status.size_in_bytes),
+            static_cast<std::int64_t>(nowMs));
         // NoOperator is an expected best-effort drop (nobody connected) — report OK so the ES does
         // not treat a missing operator as a failure. A genuine send error is surfaced as NOT_OK.
         return sendResult == SendResult::SendFailed ? NOT_OK : OK;

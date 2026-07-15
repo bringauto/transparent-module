@@ -58,8 +58,9 @@ QuicOperatorServer::~QuicOperatorServer() {
 	}
 }
 
-bool QuicOperatorServer::initialize() {
-	return loadQuic() && initRegistration() && initConfiguration() && initCredential() && initListener();
+QuicOperatorServer::InitResult QuicOperatorServer::initialize() {
+	const bool ok = loadQuic() && initRegistration() && initConfiguration() && initCredential() && initListener();
+	return ok ? InitResult::Ok : InitResult::Failed;
 }
 
 bool QuicOperatorServer::loadQuic() {
@@ -158,7 +159,7 @@ bool QuicOperatorServer::initListener() {
 	return true;
 }
 
-bool QuicOperatorServer::start() {
+QuicOperatorServer::InitResult QuicOperatorServer::start() {
 	const QUIC_STATUS status = quic_->ListenerStart(listener_, &alpnBuffer_, 1, &quicAddr_);
 	if (QUIC_FAILED(status)) {
 		logError("QUIC operator server: ListenerStart failed, status=" +
@@ -168,11 +169,11 @@ bool QuicOperatorServer::start() {
 		// block on the still-open listener (e.g. when the port is already in use).
 		quic_->ListenerClose(listener_);
 		listener_ = nullptr;
-		return false;
+		return InitResult::Failed;
 	}
 	running_.store(true);
 	logInfo("QUIC operator server: listening on port " + std::to_string(config_.port) + " (alpn=" + config_.alpn + ")");
-	return true;
+	return InitResult::Ok;
 }
 
 void QuicOperatorServer::stop() {
@@ -190,8 +191,8 @@ void QuicOperatorServer::stop() {
 }
 
 QuicOperatorServer::SendResult QuicOperatorServer::sendStatus(std::uint32_t module_id, std::uint32_t device_type,
-															 const std::string &device_role, const std::string &device_name,
-															 const std::uint8_t *payload, std::size_t payload_size,
+															 std::string_view device_role, std::string_view device_name,
+															 std::span<const std::uint8_t> payload,
 															 std::int64_t timestamp_ms) {
 	if (operatorConnection_.load() == nullptr) {
 		return SendResult::NoOperator; // no operator connected — drop (best-effort)
@@ -202,9 +203,9 @@ QuicOperatorServer::SendResult QuicOperatorServer::sendStatus(std::uint32_t modu
 	auto *device = status->mutable_device();
 	device->set_module_id(module_id);
 	device->set_type(device_type);
-	device->set_role(device_role);
-	device->set_name(device_name);
-	status->set_payload(payload, payload_size);
+	device->set_role(device_role.data(), device_role.size());
+	device->set_name(device_name.data(), device_name.size());
+	status->set_payload(payload.data(), payload.size());
 	status->set_timestamp_ms(timestamp_ms);
 
 	std::string serialized;
@@ -333,19 +334,20 @@ QUIC_STATUS QUIC_API QuicOperatorServer::connectionCallback(HQUIC connection, vo
 			// Only the accepted operator may feed the command channel. A stream opened by any other
 			// connection (a second operator being rejected, or one mid-shutdown) is rejected so its
 			// bytes never reach the device. Phase 1 is single-operator.
-			// msquic requires every stream surfaced in PEER_STREAM_STARTED to be either accepted
-			// (SetCallbackHandler) or closed (StreamClose); without a registered handler there is no
-			// SHUTDOWN_COMPLETE to reclaim on, so StreamShutdown alone would leak the handle. StreamClose
-			// rejects it cleanly.
-			if (connection != self->operatorConnection_.load()) {
-				self->quic_->StreamClose(event->PEER_STREAM_STARTED.Stream);
-				return QUIC_STATUS_SUCCESS;
-			}
+			// Every stream surfaced here — accepted or rejected — gets a callback handler and is
+			// routed through commandStreamCallback, which already drops bytes for a connection that
+			// isn't the tracked operator. A rejected stream is aborted via StreamShutdown instead of
+			// being closed immediately: msquic requires a stream to be fully shut down
+			// (SHUTDOWN_COMPLETE) before StreamClose, and closing before that is undefined behavior —
+			// commandStreamCallback's SHUTDOWN_COMPLETE case performs the actual StreamClose.
 			auto streamCtx = std::make_unique<InboundStreamContext>(InboundStreamContext{self, connection, {}});
 			self->quic_->SetCallbackHandler(event->PEER_STREAM_STARTED.Stream,
 											reinterpret_cast<void *>(commandStreamCallback), streamCtx.get());
 			// Ownership transfers to commandStreamCallback; reclaimed on SHUTDOWN_COMPLETE.
 			streamCtx.release();
+			if (connection != self->operatorConnection_.load()) {
+				self->quic_->StreamShutdown(event->PEER_STREAM_STARTED.Stream, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+			}
 			return QUIC_STATUS_SUCCESS;
 		}
 		case QUIC_CONNECTION_EVENT_SHUTDOWN_COMPLETE:
