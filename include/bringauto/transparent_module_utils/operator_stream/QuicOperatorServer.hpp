@@ -123,7 +123,9 @@ private:
 	const QUIC_API_TABLE *quic_{nullptr};
 	HQUIC registration_{nullptr};
 	HQUIC quicConfig_{nullptr};
-	HQUIC listener_{nullptr};
+	/// Written from the owning thread (initListener/start/stop) and from msquic's worker thread
+	/// (listenerCallback's STOP_COMPLETE case) — atomic for the same reason as operatorConnection_.
+	std::atomic<HQUIC> listener_{nullptr};
 	QUIC_ADDR quicAddr_{};
 	QUIC_BUFFER alpnBuffer_{};
 

@@ -137,18 +137,20 @@ bool QuicOperatorServer::initCredential() {
 }
 
 bool QuicOperatorServer::initListener() {
-	QUIC_STATUS status = quic_->ListenerOpen(registration_, listenerCallback, this, &listener_);
+	HQUIC listener{nullptr};
+	QUIC_STATUS status = quic_->ListenerOpen(registration_, listenerCallback, this, &listener);
 	if (QUIC_FAILED(status)) {
 		logError("QUIC operator server: ListenerOpen failed, status=" +
 				 std::to_string(static_cast<unsigned>(status)));
 		return false;
 	}
+	listener_.store(listener);
 	if (!config_.listenAddress.empty()) {
 		// Bind the configured address (IPv4 or IPv6); QuicAddrFromString also sets the port.
 		if (!QuicAddrFromString(config_.listenAddress.c_str(), config_.port, &quicAddr_)) {
 			logError("QUIC operator server: invalid quic_listen_address '" + config_.listenAddress + "'");
-			quic_->ListenerClose(listener_);
-			listener_ = nullptr;
+			quic_->ListenerClose(listener);
+			listener_.store(nullptr);
 			return false;
 		}
 	} else {
@@ -160,15 +162,16 @@ bool QuicOperatorServer::initListener() {
 }
 
 QuicOperatorServer::InitResult QuicOperatorServer::start() {
-	const QUIC_STATUS status = quic_->ListenerStart(listener_, &alpnBuffer_, 1, &quicAddr_);
+	HQUIC listener = listener_.load();
+	const QUIC_STATUS status = quic_->ListenerStart(listener, &alpnBuffer_, 1, &quicAddr_);
 	if (QUIC_FAILED(status)) {
 		logError("QUIC operator server: ListenerStart failed, status=" +
 				 std::to_string(static_cast<unsigned>(status)));
 		// The listener was opened but never started, so running_ stays false and stop() will not tear it
 		// down — close it here. Otherwise the handle leaks and RegistrationClose in the destructor can
 		// block on the still-open listener (e.g. when the port is already in use).
-		quic_->ListenerClose(listener_);
-		listener_ = nullptr;
+		quic_->ListenerClose(listener);
+		listener_.store(nullptr);
 		return InitResult::Failed;
 	}
 	running_.store(true);
@@ -180,8 +183,8 @@ void QuicOperatorServer::stop() {
 	if (!running_.exchange(false)) {
 		return;
 	}
-	if (listener_ != nullptr) {
-		quic_->ListenerStop(listener_);
+	if (HQUIC listener = listener_.load(); listener != nullptr) {
+		quic_->ListenerStop(listener);
 	}
 	HQUIC conn = operatorConnection_.exchange(nullptr);
 	if (conn != nullptr) {
@@ -282,7 +285,7 @@ QUIC_STATUS QUIC_API QuicOperatorServer::listenerCallback(HQUIC listener, void *
 			if (!event->STOP_COMPLETE.AppCloseInProgress) {
 				self->quic_->ListenerClose(listener);
 			}
-			self->listener_ = nullptr;
+			self->listener_.store(nullptr);
 			return QUIC_STATUS_SUCCESS;
 		default:
 			return QUIC_STATUS_NOT_SUPPORTED;
@@ -346,7 +349,12 @@ QUIC_STATUS QUIC_API QuicOperatorServer::connectionCallback(HQUIC connection, vo
 			// Ownership transfers to commandStreamCallback; reclaimed on SHUTDOWN_COMPLETE.
 			streamCtx.release();
 			if (connection != self->operatorConnection_.load()) {
-				self->quic_->StreamShutdown(event->PEER_STREAM_STARTED.Stream, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+				const QUIC_STATUS status =
+						self->quic_->StreamShutdown(event->PEER_STREAM_STARTED.Stream, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+				if (QUIC_FAILED(status)) {
+					logWarning("QUIC operator server: StreamShutdown (rejected peer stream) failed, status=" +
+							   toHex(static_cast<unsigned>(status)));
+				}
 			}
 			return QUIC_STATUS_SUCCESS;
 		}
@@ -377,7 +385,11 @@ QUIC_STATUS QUIC_API QuicOperatorServer::commandStreamCallback(HQUIC stream, voi
 				logWarning("QUIC operator server: inbound command frame exceeded " +
 						   std::to_string(MAX_COMMAND_FRAME_BYTES) + " bytes, aborting stream");
 				ctx->bytes.clear();
-				ctx->server->quic_->StreamShutdown(stream, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+				const QUIC_STATUS status = ctx->server->quic_->StreamShutdown(stream, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+				if (QUIC_FAILED(status)) {
+					logWarning("QUIC operator server: StreamShutdown (oversized frame) failed, status=" +
+							   toHex(static_cast<unsigned>(status)));
+				}
 				return QUIC_STATUS_SUCCESS;
 			}
 			if (event->RECEIVE.Flags & QUIC_RECEIVE_FLAG_FIN) {

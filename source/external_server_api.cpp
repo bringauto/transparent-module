@@ -34,24 +34,36 @@ namespace
         }
     }
 
-    /// Parse the quic_* config keys into a QuicOperatorServerConfig. Returns std::nullopt if
-    /// quic_port is absent/zero (QUIC is opt-in alongside the existing Fleet HTTP API —
-    /// see the header comment on context::quic_server).
-    std::optional<op::QuicOperatorServerConfig> parseQuicConfig(
-        const bringauto::fleet_protocol::cxx::KeyValueConfig &config)
+    /// Distinguishes "QUIC not requested" (quic_port absent — fall back to Fleet HTTP API only) from
+    /// "QUIC requested but misconfigured" (quic_port present but invalid, or cert/key/CA missing) — the
+    /// latter must fail init() hard instead of silently downgrading to Fleet-HTTP-only.
+    enum class QuicConfigStatus { NotConfigured, Misconfigured, Configured };
+
+    struct QuicConfigResult
+    {
+        QuicConfigStatus status;
+        op::QuicOperatorServerConfig config{};
+    };
+
+    /// Parse the quic_* config keys into a QuicOperatorServerConfig. See QuicConfigStatus for the
+    /// meaning of the returned status; on Misconfigured an explanatory message has already been
+    /// written to stderr.
+    QuicConfigResult parseQuicConfig(const bringauto::fleet_protocol::cxx::KeyValueConfig &config)
     {
         op::QuicOperatorServerConfig quicConfig{};
+        bool portProvided = false;
         int port = 0;
 
         for (auto i = config.cbegin(); i != config.cend(); ++i)
         {
             if (i->first == "quic_port")
             {
+                portProvided = true;
                 const auto parsedPort = parseQuicPort(i->second);
                 if (!parsedPort)
                 {
                     std::cerr << "[transparent-module] init: invalid quic_port" << std::endl;
-                    return std::nullopt;
+                    return {QuicConfigStatus::Misconfigured};
                 }
                 port = *parsedPort;
             }
@@ -81,14 +93,14 @@ namespace
             }
         }
 
-        if (port <= 0)
+        if (!portProvided)
         {
-            return std::nullopt; // QUIC not configured — caller falls back to Fleet HTTP API
+            return {QuicConfigStatus::NotConfigured}; // caller falls back to Fleet HTTP API
         }
-        if (port > 65535)
+        if (port <= 0 || port > 65535)
         {
             std::cerr << "[transparent-module] init: quic_port must be in range 1-65535" << std::endl;
-            return std::nullopt;
+            return {QuicConfigStatus::Misconfigured};
         }
         quicConfig.port = static_cast<std::uint16_t>(port);
 
@@ -96,16 +108,16 @@ namespace
         {
             std::cerr << "[transparent-module] init: quic_port set but missing quic_cert_path/quic_key_path"
                       << std::endl;
-            return std::nullopt;
+            return {QuicConfigStatus::Misconfigured};
         }
         if (!quicConfig.disableClientAuth && quicConfig.caCertsPath.empty())
         {
             std::cerr << "[transparent-module] init: quic_ca_path is required when client authentication is "
                          "enabled (set quic_ca_path, or quic_disable_client_auth=true for dev/loopback)"
                       << std::endl;
-            return std::nullopt;
+            return {QuicConfigStatus::Misconfigured};
         }
-        return quicConfig;
+        return {QuicConfigStatus::Configured, std::move(quicConfig)};
     }
 } // namespace
 
@@ -245,10 +257,19 @@ void *init(const config config_data)
 
     // QUIC operator transport is opt-in (present only if the config supplies quic_port) —
     // when absent, forward_status()/wait_for_command() fall back to the Fleet HTTP API above unchanged.
-    if (auto quicConfig = parseQuicConfig(config))
+    // A present-but-invalid quic_* config fails init() hard instead of silently downgrading to
+    // Fleet-HTTP-only — see parseQuicConfig / QuicConfigStatus.
+    auto quicResult = parseQuicConfig(config);
+    if (quicResult.status == QuicConfigStatus::Misconfigured)
+    {
+        std::cerr << "[transparent-module] init: QUIC operator transport misconfigured, aborting" << std::endl;
+        delete context;
+        return nullptr;
+    }
+    if (quicResult.status == QuicConfigStatus::Configured)
     {
         context->quic_server =
-            std::make_unique<op::QuicOperatorServer>(std::move(*quicConfig), context->operator_channel);
+            std::make_unique<op::QuicOperatorServer>(std::move(quicResult.config), context->operator_channel);
         using InitResult = op::QuicOperatorServer::InitResult;
         if (context->quic_server->initialize() != InitResult::Ok || context->quic_server->start() != InitResult::Ok)
         {
