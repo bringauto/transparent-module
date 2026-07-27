@@ -72,10 +72,11 @@ IF (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
     FIND_PACKAGE(cpprestsdk REQUIRED)
 
     # Operator-facing QUIC transport, opt-in alongside the Fleet HTTP API above —
-    # ported from teleop-module's equivalent: msquic + protobuf for the operator
-    # stream wire protocol (own proto/transparent_operator_stream.proto — see its file header
-    # for why it can't share teleop-module's operator_stream.proto).
-    FIND_PACKAGE(msquic CONFIG REQUIRED)
+    # shared, transport-only ba-quic-lib instead of raw msquic + protobuf for the
+    # operator stream wire protocol (own proto/transparent_operator_stream.proto — see its file
+    # header for why it can't share teleop-module's operator_stream.proto).
+    LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
+    FIND_PACKAGE(BAQuicLib REQUIRED)
     FIND_PACKAGE(Protobuf REQUIRED)
     PROTOBUF_GENERATE_CPP(TRANSPARENT_OPERATOR_PROTO_SRCS TRANSPARENT_OPERATOR_PROTO_HDRS
             proto/transparent_operator_stream.proto)
@@ -144,7 +145,7 @@ IF (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
             PRIVATE
             transparent_module_sources
             fleet-http-client-shared::fleet-http-client-shared
-            msquic
+            ba-quic-lib::ba-quic-lib
             protobuf::libprotobuf
             PUBLIC
             fleet-protocol-interface::module-maintainer-external-server-interface
