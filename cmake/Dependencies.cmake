@@ -13,6 +13,10 @@ IF (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
     BA_PACKAGE_LIBRARY(zlib                                 v1.3.2)
     # Operator-facing QUIC transport: msquic is provided transitively by ba-quic-lib
     # (linked PUBLIC), not resolved directly here. See cmake/FindBAQuicLib.cmake.
+    # BA_PACKAGE_DEPS_IMPORTED(transparent-module-interface) still ships it: it walks
+    # LINK_LIBRARIES/INTERFACE_LINK_LIBRARIES recursively through ba-quic-lib (a regular, non-imported
+    # target, so it has no IMPORTED_LOCATION itself) down to msquic's own IMPORTED_LOCATION, and
+    # installs that .so + its SONAME symlinks.
     BA_PACKAGE_LIBRARY(protobuf                              v4.21.12)
 
 ENDIF ()

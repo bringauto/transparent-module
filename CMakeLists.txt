@@ -50,6 +50,8 @@ FIND_PACKAGE(CMLIB
         COMPONENTS CMDEF CMUTIL STORAGE
         REQUIRED
 )
+LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
+
 IF (NOT BRINGAUTO_SYSTEM_DEP)
     INCLUDE("cmake/Dependencies.cmake")
     IF (BRINGAUTO_GET_PACKAGES_ONLY)
@@ -75,7 +77,6 @@ IF (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
     # shared, transport-only ba-quic-lib instead of raw msquic + protobuf for the
     # operator stream wire protocol (own proto/transparent_operator_stream.proto — see its file
     # header for why it can't share teleop-module's operator_stream.proto).
-    LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
     FIND_PACKAGE(BAQuicLib REQUIRED)
     FIND_PACKAGE(Protobuf REQUIRED)
     PROTOBUF_GENERATE_CPP(TRANSPARENT_OPERATOR_PROTO_SRCS TRANSPARENT_OPERATOR_PROTO_HDRS

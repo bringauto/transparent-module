@@ -2,8 +2,6 @@
 
 #include "transparent_operator_stream.pb.h"
 
-#include <msquic.h> // QUIC_SERVER_RESUME_AND_ZERORTT
-
 #include <iostream>
 #include <utility>
 
@@ -28,8 +26,10 @@ QuicOperatorServer::QuicOperatorServer(QuicOperatorServerConfig config, Operator
 
 	quicServer_ = std::make_unique<bringauto::quic::QuicServer>(buildEndpointConfig(), buildSettings(),
 																 std::move(callbacks));
-	// Single operator: a second concurrent connect attempt is rejected by the transport itself
-	// (ConnectionShutdown), so this class no longer needs its own compare-and-swap "already have an
+	// Single operator: ba-quic-lib's QuicServer::onConnected() checks maxConnections and calls
+	// ConnectionShutdown *before* invoking callbacks_.onConnected() for a rejected attempt (confirmed
+	// against quic-lib's QuicServer.cpp) -- so onConnected() below is never called for a connection
+	// that loses the race, and this class no longer needs its own compare-and-swap "already have an
 	// operator" logic.
 	quicServer_->maxConnections = 1;
 }
@@ -58,7 +58,10 @@ bringauto::quic::QuicSettings QuicOperatorServer::buildSettings() const {
 	settings.idleTimeoutMs = 30000;
 	settings.keepAliveIntervalMs = 5000;
 	settings.sendBufferingEnabled = true;
-	settings.serverResumptionLevel = static_cast<std::uint8_t>(QUIC_SERVER_RESUME_AND_ZERORTT);
+	// 2 == QUIC_SERVER_RESUME_AND_ZERORTT (msquic.h). Spelled out as a literal rather than pulling in
+	// <msquic.h> for one enum value that ba-quic-lib doesn't itself expose — ba-quic-lib links
+	// msquic PUBLIC only incidentally, so relying on the transitive include is fragile.
+	settings.serverResumptionLevel = 2;
 	return settings;
 }
 
