@@ -1,0 +1,9 @@
+version: v2
+lint:
+  use:
+    - DEFAULT
+  except:
+    # transparent_operator_stream.proto sits flat in proto/ (matching this project's existing
+    # CMakeLists.txt PROTOBUF_GENERATE_CPP path) rather than under a directory tree mirroring its
+    # package name — intentional, so this rule is disabled instead of relocating the file.
+    - PACKAGE_DIRECTORY_MATCH
