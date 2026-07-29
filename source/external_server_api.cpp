@@ -37,7 +37,12 @@ namespace
     /// Distinguishes "QUIC not requested" (quic_port absent — fall back to Fleet HTTP API only) from
     /// "QUIC requested but misconfigured" (quic_port present but invalid, or cert/key/CA missing) — the
     /// latter must fail init() hard instead of silently downgrading to Fleet-HTTP-only.
-    enum class QuicConfigStatus { NotConfigured, Misconfigured, Configured };
+    enum class QuicConfigStatus
+    {
+        NotConfigured,
+        Misconfigured,
+        Configured
+    };
 
     struct QuicConfigResult
     {
@@ -314,13 +319,13 @@ int forward_status(const buffer device_status, const device_identification devic
     if (con->quic_server)
     {
         using SendResult = op::QuicOperatorServer::SendResult;
-        const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                std::chrono::system_clock::now().time_since_epoch())
-                                .count();
+        const auto nowMs =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch())
+                .count();
         const auto sendResult = con->quic_server->sendStatus(
             device.module, device.device_type, device_role.getStringView(), device_name.getStringView(),
             std::span<const std::uint8_t>(static_cast<const std::uint8_t *>(device_status.data),
-                                           device_status.size_in_bytes),
+                                          device_status.size_in_bytes),
             static_cast<std::int64_t>(nowMs));
         // NoOperator is an expected best-effort drop (nobody connected) — report OK so the ES does
         // not treat a missing operator as a failure. A genuine send error is surfaced as NOT_OK.
@@ -411,7 +416,8 @@ int device_disconnected(const int disconnect_type, const device_identification d
         const std::string_view it_device_name(static_cast<char *>(it->device_name.data), it->device_name.size_in_bytes);
 
         bool device_is_present = it->device_type == device.device_type && it_device_role == device_device_role &&
-            it_device_name == device_device_name && it->module == device.module && it->priority == device.priority;
+                                 it_device_name == device_device_name && it->module == device.module &&
+                                 it->priority == device.priority;
 
         if (device_is_present)
         {
@@ -486,25 +492,36 @@ int wait_for_command(int timeout_time_in_ms, void *context)
 
         std::lock_guard lock(con->mutex);
         // Transparent module doesn't discriminate by device_type (see its README: "All device
-        // numbers are valid but do not affect the module's function") — route to the first
-        // connected device on the addressed module.
-        auto target = std::find_if(con->devices.begin(), con->devices.end(), [&](const device_identification &dev) {
-            return static_cast<std::uint32_t>(dev.module) == command->module_id;
-        });
+        // numbers are valid but do not affect the module's function") — but the README's Fleet HTTP
+        // example still keys a device on module+role+name, so match on those to avoid routing a
+        // command to the wrong device when several are connected under the same module.
+        auto target = std::find_if(con->devices.begin(), con->devices.end(),
+                                   [&](const device_identification &dev)
+                                   {
+                                       if (static_cast<std::uint32_t>(dev.module) != command->module_id)
+                                       {
+                                           return false;
+                                       }
+                                       bringauto::fleet_protocol::cxx::BufferAsString devRole(&dev.device_role);
+                                       bringauto::fleet_protocol::cxx::BufferAsString devName(&dev.device_name);
+                                       return devRole.getStringView() == command->device_role &&
+                                              devName.getStringView() == command->device_name;
+                                   });
         if (target == con->devices.end())
         {
-            std::cerr << "[transparent-module] wait_for_command: operator command for module="
-                      << command->module_id << " but no matching device connected, dropping" << std::endl;
+            std::cerr << "[transparent-module] wait_for_command: operator command for module=" << command->module_id
+                      << " role=" << command->device_role << " name=" << command->device_name
+                      << " but no matching device connected, dropping" << std::endl;
             return TIMEOUT_OCCURRED;
         }
 
         bringauto::fleet_protocol::cxx::BufferAsString targetRole(&target->device_role);
         bringauto::fleet_protocol::cxx::BufferAsString targetName(&target->device_name);
         std::string payload(command->payload.begin(), command->payload.end());
-        con->command_vector.emplace_back(
-            std::move(payload), bringauto::fleet_protocol::cxx::DeviceID(
-                                     target->module, target->device_type, target->priority,
-                                     std::string(targetRole.getStringView()), std::string(targetName.getStringView())));
+        con->command_vector.emplace_back(std::move(payload), bringauto::fleet_protocol::cxx::DeviceID(
+                                                                 target->module, target->device_type, target->priority,
+                                                                 std::string(targetRole.getStringView()),
+                                                                 std::string(targetName.getStringView())));
         return OK;
     }
 
