@@ -28,7 +28,7 @@ include(FetchContent)
 set(_token $ENV{BA_GITLAB_TOKEN_URI})
 FetchContent_Declare(ba-quic-lib
     GIT_REPOSITORY "https://${_token}gitlab.bringauto.com/bring-auto/libraries/quic-lib.git"
-    GIT_TAG        v0.1.1
+    GIT_TAG        v0.1.2
     GIT_SHALLOW    TRUE
     OVERRIDE_FIND_PACKAGE)
 # ba-quic-lib's own CMakeLists.txt declares `option(BRINGAUTO_TESTS ...)` and
