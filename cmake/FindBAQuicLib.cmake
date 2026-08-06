@@ -25,17 +25,16 @@ endif()
 
 message(STATUS "[BA] ba-quic-lib: system package not found, fetching via FetchContent")
 include(FetchContent)
-find_package(Git QUIET)
 set(_token "$ENV{BA_GITLAB_TOKEN_URI}")
-if(_token AND GIT_EXECUTABLE)
-    # Route the credential through git's own URL rewriting instead of embedding it in
-    # GIT_REPOSITORY -- an embedded token gets written to disk in _deps/ba-quic-lib-subbuild's
-    # generated scripts, CMakeCache.txt/the FetchContent property store, and the clone's own
-    # .git/config as the origin remote, any of which can leak it via CI artifact archiving, a
-    # clone-failure log, or a Docker layer.
-    execute_process(COMMAND "${GIT_EXECUTABLE}" config --global
-        "url.https://${_token}gitlab.bringauto.com/.insteadOf"
-        "https://gitlab.bringauto.com/")
+if(_token)
+    # Credential stays in this process's environment (inherited by the FetchContent clone
+    # subprocess) rather than being copied to disk -- a `git config --global` rewrite would
+    # otherwise persist the token in ~/.gitconfig keyed by its own value, so a rotated token
+    # appends a second section instead of replacing the first, and git keeps resolving to
+    # whichever token was written there first. Requires git >= 2.31.
+    set(ENV{GIT_CONFIG_COUNT} 1)
+    set(ENV{GIT_CONFIG_KEY_0}   "url.https://${_token}gitlab.bringauto.com/.insteadOf")
+    set(ENV{GIT_CONFIG_VALUE_0} "https://gitlab.bringauto.com/")
 endif()
 unset(_token)
 FetchContent_Declare(ba-quic-lib
@@ -62,6 +61,9 @@ set(_ba_quic_lib_saved_install_flag "${BRINGAUTO_INSTALL}")
 set(BRINGAUTO_TESTS OFF)
 set(BRINGAUTO_INSTALL OFF)
 FetchContent_MakeAvailable(ba-quic-lib)
+unset(ENV{GIT_CONFIG_COUNT})
+unset(ENV{GIT_CONFIG_KEY_0})
+unset(ENV{GIT_CONFIG_VALUE_0})
 set(BRINGAUTO_TESTS "${_ba_quic_lib_saved_tests_flag}")
 set(BRINGAUTO_INSTALL "${_ba_quic_lib_saved_install_flag}")
 unset(_ba_quic_lib_saved_tests_flag)
