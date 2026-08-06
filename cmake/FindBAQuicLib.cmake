@@ -25,9 +25,21 @@ endif()
 
 message(STATUS "[BA] ba-quic-lib: system package not found, fetching via FetchContent")
 include(FetchContent)
-set(_token $ENV{BA_GITLAB_TOKEN_URI})
+find_package(Git QUIET)
+set(_token "$ENV{BA_GITLAB_TOKEN_URI}")
+if(_token AND GIT_EXECUTABLE)
+    # Route the credential through git's own URL rewriting instead of embedding it in
+    # GIT_REPOSITORY -- an embedded token gets written to disk in _deps/ba-quic-lib-subbuild's
+    # generated scripts, CMakeCache.txt/the FetchContent property store, and the clone's own
+    # .git/config as the origin remote, any of which can leak it via CI artifact archiving, a
+    # clone-failure log, or a Docker layer.
+    execute_process(COMMAND "${GIT_EXECUTABLE}" config --global
+        "url.https://${_token}gitlab.bringauto.com/.insteadOf"
+        "https://gitlab.bringauto.com/")
+endif()
+unset(_token)
 FetchContent_Declare(ba-quic-lib
-    GIT_REPOSITORY "https://${_token}gitlab.bringauto.com/bring-auto/libraries/quic-lib.git"
+    GIT_REPOSITORY "https://gitlab.bringauto.com/bring-auto/libraries/quic-lib.git"
     GIT_TAG        v0.1.2
     GIT_SHALLOW    TRUE
     OVERRIDE_FIND_PACKAGE)
@@ -37,9 +49,11 @@ FetchContent_Declare(ba-quic-lib
 #  - BRINGAUTO_TESTS=ON would also build ba-quic-lib's own test suite (gtest, test certs, etc.).
 #  - BRINGAUTO_INSTALL=ON (set by this repo's CMDEF packaging) would run ba-quic-lib's
 #    install(EXPORT ba-quic-lib-targets), which fails at generate time: the exported ba-quic-lib
-#    target links msquic PUBLIC, but msquic (also a FetchContent subdir target) is in no export set,
-#    and CMake forbids exporting a target whose public dependency isn't exported too. We link
-#    ba-quic-lib statically in-tree and never consume its install/export, so force both OFF.
+#    target links msquic PUBLIC, but msquic -- resolved by ba-quic-lib's own FindBAMsquic.cmake as
+#    an imported prebuilt/system package, or (last resort) a plain FetchContent subdir target -- is
+#    in no export set either way, and CMake forbids exporting a target whose public dependency
+#    isn't exported too. We link ba-quic-lib statically in-tree and never consume its
+#    install/export, so force both OFF.
 # Shadow them with plain (non-cache) variables for the duration of this add_subdirectory only --
 # CMake resolves the nearest-scope normal variable before falling back to the cache entry, and a
 # child directory inherits the parent's normal-variable values at the point it's added.

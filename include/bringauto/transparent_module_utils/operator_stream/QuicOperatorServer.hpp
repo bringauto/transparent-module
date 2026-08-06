@@ -4,6 +4,7 @@
 
 #include <bringauto/quic/QuicServer.hpp>
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -30,8 +31,9 @@ struct QuicOperatorServerConfig {
 
 /**
  * Operator-facing QUIC server living inside the Transparent module's external-server plugin —
- * the operator leg, used alongside (not instead of) the existing Fleet HTTP API path;
- * ported from teleop-module's QuicOperatorServer, single-operator Phase 1.
+ * the operator leg, taking over from the existing Fleet HTTP API path when quic_port is
+ * configured (see external_server_api.cpp); ported from teleop-module's QuicOperatorServer,
+ * single-operator Phase 1.
  *
  * Sits on top of the shared, transport-only `bringauto::quic::QuicServer` (ba-quic-lib) instead of
  * raw msquic, mirroring teleop-module's own migration. This class now owns only the
@@ -112,6 +114,10 @@ private:
 	/// Guards operatorConnection_. Single operator (Phase 1, same as teleop-module).
 	mutable std::mutex operatorMutex_;
 	std::optional<ConnectionId> operatorConnection_;
+
+	/// Makes stop() idempotent — an explicit stop() followed by the destructor's stop() call
+	/// must not run quicServer_->stop()/channel_.shutdown() twice.
+	std::atomic<bool> running_{true};
 };
 
 } // namespace bringauto::transparent_module_utils::operator_stream

@@ -74,6 +74,9 @@ QuicOperatorServer::InitResult QuicOperatorServer::start() {
 }
 
 void QuicOperatorServer::stop() {
+	if (!running_.exchange(false)) {
+		return;
+	}
 	quicServer_->stop();
 	channel_.shutdown();
 }
