@@ -66,7 +66,8 @@ public:
 	/// Outcome of initialize()/start().
 	enum class InitResult { Ok, Failed };
 
-	/// Open msquic, registration, configuration, credential (mTLS), and the listener.
+	/// Initialize the underlying ba-quic-lib transport (registration, TLS credential, listener
+	/// setup). Does not begin accepting connections; see start().
 	[[nodiscard]] InitResult initialize();
 
 	/// Start the listener.
@@ -105,12 +106,6 @@ private:
 	QuicOperatorServerConfig config_;
 	OperatorChannel &channel_;
 
-	/// The shared, transport-only ba-quic-lib server. Declared after config_/channel_ (its
-	/// construction reads config_ via buildEndpointConfig()/buildSettings()) and before
-	/// operatorMutex_/operatorConnection_ (its callbacks, still possibly in flight during
-	/// destruction, read/write those).
-	std::unique_ptr<bringauto::quic::QuicServer> quicServer_;
-
 	/// Guards operatorConnection_. Single operator (Phase 1, same as teleop-module).
 	mutable std::mutex operatorMutex_;
 	std::optional<ConnectionId> operatorConnection_;
@@ -118,6 +113,11 @@ private:
 	/// Makes stop() idempotent — an explicit stop() followed by the destructor's stop() call
 	/// must not run quicServer_->stop()/channel_.shutdown() twice.
 	std::atomic<bool> running_{true};
+
+	/// The shared, transport-only ba-quic-lib server. Declared last so it is destroyed first —
+	/// its callbacks, still possibly in flight during destruction, read/write operatorMutex_ and
+	/// operatorConnection_ above, which must therefore outlive it.
+	std::unique_ptr<bringauto::quic::QuicServer> quicServer_;
 };
 
 } // namespace bringauto::transparent_module_utils::operator_stream
