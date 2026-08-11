@@ -11,10 +11,12 @@ IF (FLEET_PROTOCOL_BUILD_EXTERNAL_SERVER)
     BA_PACKAGE_LIBRARY(boost         v1.86.0)
     BA_PACKAGE_LIBRARY(cpprestsdk    v2.10.20)
     BA_PACKAGE_LIBRARY(zlib                                 v1.3.2)
-    # Operator-facing QUIC transport, ported from teleop-module's equivalent: msquic +
-    # protobuf for the operator stream protocol (own .proto — see its file header for why it can't
-    # share teleop-module's).
-    BA_PACKAGE_LIBRARY(msquic                                v2.5.6)
+    # Operator-facing QUIC transport: msquic is provided transitively by ba-quic-lib
+    # (linked PUBLIC), not resolved directly here. See cmake/FindBAQuicLib.cmake.
+    # BA_PACKAGE_DEPS_IMPORTED(transparent-module-interface) still ships it: it walks
+    # LINK_LIBRARIES/INTERFACE_LINK_LIBRARIES recursively through ba-quic-lib (a regular, non-imported
+    # target, so it has no IMPORTED_LOCATION itself) down to msquic's own IMPORTED_LOCATION, and
+    # installs that .so + its SONAME symlinks.
     BA_PACKAGE_LIBRARY(protobuf                              v4.21.12)
 
 ENDIF ()
