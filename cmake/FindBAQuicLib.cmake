@@ -32,7 +32,10 @@ FETCHCONTENT_DECLARE(ba-quic-lib
     OVERRIDE_FIND_PACKAGE)
 # Shadow parent cache variables so ba-quic-lib's add_subdirectory does not inherit them:
 # BRINGAUTO_TESTS would pull in its test suite; BRINGAUTO_INSTALL/PACKAGE would trigger
-# install(EXPORT ba-quic-lib-targets) which fails because msquic is not in any export set.
+# install(EXPORT ba-quic-lib-targets), which fails at generate time: the exported ba-quic-lib
+# target links msquic PUBLIC, but msquic is in no export set either way (system package or
+# FetchContent subdir), and CMake forbids exporting a target whose public dependency isn't
+# exported too.
 SET(BRINGAUTO_TESTS OFF)
 SET(BRINGAUTO_INSTALL OFF)
 SET(BRINGAUTO_PACKAGE OFF)
