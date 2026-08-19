@@ -30,17 +30,18 @@ FETCHCONTENT_DECLARE(ba-quic-lib
     GIT_TAG        v0.1.2
     GIT_SHALLOW    TRUE
     OVERRIDE_FIND_PACKAGE)
-# Shadow parent cache variables so ba-quic-lib's add_subdirectory does not inherit them:
+# Shadow parent normal variables so ba-quic-lib's add_subdirectory does not inherit them.
+# BLOCK(SCOPE_FOR VARIABLES) isolates the assignments and auto-restores the caller's values
+# on exit (UNSET would instead permanently erase a caller-defined normal variable).
 # BRINGAUTO_TESTS would pull in its test suite; BRINGAUTO_INSTALL/PACKAGE would trigger
 # install(EXPORT ba-quic-lib-targets), which fails at generate time: the exported ba-quic-lib
 # target links msquic PUBLIC, but msquic is in no export set either way (system package or
 # FetchContent subdir), and CMake forbids exporting a target whose public dependency isn't
 # exported too.
-SET(BRINGAUTO_TESTS OFF)
-SET(BRINGAUTO_INSTALL OFF)
-SET(BRINGAUTO_PACKAGE OFF)
-FETCHCONTENT_MAKEAVAILABLE(ba-quic-lib)
-UNSET(BRINGAUTO_TESTS)
-UNSET(BRINGAUTO_INSTALL)
-UNSET(BRINGAUTO_PACKAGE)
+BLOCK(SCOPE_FOR VARIABLES)
+    SET(BRINGAUTO_TESTS OFF)
+    SET(BRINGAUTO_INSTALL OFF)
+    SET(BRINGAUTO_PACKAGE OFF)
+    FETCHCONTENT_MAKEAVAILABLE(ba-quic-lib)
+ENDBLOCK()
 SET(BAQuicLib_FOUND TRUE)
