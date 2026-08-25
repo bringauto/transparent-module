@@ -52,6 +52,12 @@ struct QuicOperatorServerConfig {
  * Single operator: `quicServer_.maxConnections = 1` rejects a second concurrent connect attempt at
  * the transport layer already (ConnectionShutdown), so — unlike the old hand-rolled version — this
  * class no longer needs its own compare-and-swap "already have an operator" logic.
+ *
+ * BAF-1900 update: the above does not hold for two handshakes reaching CONNECTED simultaneously —
+ * ba-quic-lib's own `QuicServer::onConnected` documents this race as fail-open. `onConnected()`
+ * does guard `operatorConnection_` with an explicit check-and-set after all, refusing
+ * (`disconnect()`) any additional operator once one is set (mirrors teleop-module's
+ * `QuicOperatorServer`).
  */
 class QuicOperatorServer {
 public:

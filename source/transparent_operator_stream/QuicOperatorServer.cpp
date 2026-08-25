@@ -31,6 +31,11 @@ QuicOperatorServer::QuicOperatorServer(QuicOperatorServerConfig config, Operator
 	// against quic-lib's QuicServer.cpp) -- so onConnected() below is never called for a connection
 	// that loses the race, and this class no longer needs its own compare-and-swap "already have an
 	// operator" logic.
+	// BAF-1900 update: the above does not hold for two handshakes reaching CONNECTED simultaneously
+	// -- ba-quic-lib's own QuicServer::onConnected documents this race as fail-open. onConnected()
+	// below therefore does guard operatorConnection_ with an explicit check-and-set after all,
+	// refusing (disconnect()) any additional operator once one is set (ported from teleop-module's
+	// QuicOperatorServer, same fix).
 	quicServer_->maxConnections = 1;
 }
 
@@ -57,6 +62,9 @@ bringauto::quic::QuicSettings QuicOperatorServer::buildSettings() const {
 	// (1024) already matches the old PeerUnidiStreamCount setting, so it is left unset here.
 	settings.idleTimeoutMs = 30000;
 	settings.keepAliveIntervalMs = 5000;
+	// Left at ba-quic-lib's own default (5000ms) -- set explicitly so the choice reads as
+	// deliberate, not inherited (mirrors teleop-module's QuicOperatorServer).
+	settings.disconnectTimeoutMs = 5000;
 	settings.sendBufferingEnabled = true;
 	// 2 == QUIC_SERVER_RESUME_AND_ZERORTT (msquic.h). Spelled out as a literal rather than pulling in
 	// <msquic.h> for one enum value that ba-quic-lib doesn't itself expose — ba-quic-lib links
@@ -125,15 +133,24 @@ QuicOperatorServer::SendResult QuicOperatorServer::sendStatus(std::uint32_t modu
 }
 
 void QuicOperatorServer::onConnected(ConnectionId id) {
-	std::lock_guard<std::mutex> lock(operatorMutex_);
-	operatorConnection_ = std::move(id);
-	logInfo("QUIC operator server: operator connected");
+	{
+		std::lock_guard<std::mutex> lock(operatorMutex_);
+		if (!operatorConnection_.has_value()) {
+			operatorConnection_ = std::move(id);
+			logInfo("QUIC operator server: operator connected");
+			return;
+		}
+	}
+	logWarning("QUIC operator server: an operator is already connected, rejecting new one "
+			   "(single-operator)");
+	quicServer_->disconnect(id);
 }
 
 void QuicOperatorServer::onDisconnected(ConnectionId id) {
 	{
 		std::lock_guard<std::mutex> lock(operatorMutex_);
 		if (operatorConnection_ != id) {
+			// BAF-1900: also covers a connection rejected by onConnected()'s own disconnect() call.
 			return; // a connection rejected by maxConnections never became "the operator"
 		}
 		operatorConnection_.reset();
